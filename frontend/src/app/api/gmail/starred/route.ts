@@ -44,13 +44,22 @@ export async function GET(req: NextRequest) {
 
         const labels = detail.data.labelIds ?? [];
 
+        // Parse "Display Name <email@domain.com>" → name + email separately
+        const rawFrom = getHeader('From');
+        const emailMatch = rawFrom.match(/<([^>]+)>/);
+        const fromEmail = emailMatch ? emailMatch[1] : rawFrom.trim();
+        const fromName  = emailMatch
+          ? rawFrom.replace(/<[^>]+>/, '').trim().replace(/^"|"$/g, '')
+          : rawFrom.split('@')[0];
+
         return {
           id: detail.data.id,
-          from: getHeader('From'),
+          from: fromName || fromEmail,
+          fromEmail,
           subject: getHeader('Subject'),
           date: getHeader('Date'),
           snippet: detail.data.snippet ?? '',
-          isRead: !labels.includes('UNREAD'),
+          isUnread: labels.includes('UNREAD'),
           isStarred: labels.includes('STARRED'),
         };
       }),

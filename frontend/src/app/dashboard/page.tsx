@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -153,15 +154,16 @@ export default function DashboardPage() {
     setDateStr(getDateStr());
   }, []);
 
-  const userName = user?.name?.split(' ')[0] || 'Usuario';
+  const userName = user?.name?.trim().split(' ')[0] || 'Usuario';
 
   // Map real starred emails to the display format, fall back to mock data
   const displayEmails = (!isLoadingInbox && starred.length > 0)
     ? starred.slice(0, 5).map((e, i) => {
-        const nameInitials = e.from.split(' ').filter(Boolean);
+        const safeName = e.from || e.fromEmail || '?';
+        const nameInitials = safeName.split(' ').filter(Boolean);
         const avatar = nameInitials.length >= 2
-          ? (nameInitials[0][0] + nameInitials[1][0]).toUpperCase()
-          : e.from.slice(0, 2).toUpperCase();
+          ? ((nameInitials[0][0] ?? '') + (nameInitials[1][0] ?? '')).toUpperCase()
+          : safeName.slice(0, 2).toUpperCase();
         const colors = ['bg-red-500', 'bg-blue-600', 'bg-emerald-600', 'bg-blue-800', 'bg-orange-500'];
         const date = new Date(e.date);
         const diffH = (Date.now() - date.getTime()) / 3_600_000;
@@ -171,7 +173,7 @@ export default function DashboardPage() {
           : date.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
         return {
           id: i + 1,
-          from: e.from,
+          from: safeName,
           subject: e.subject,
           time,
           avatar,
@@ -309,7 +311,7 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <p className="text-sm font-bold text-neutral-800">Deals recientes</p>
-            <a href="/dashboard/crm/deals" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ver pipeline</a>
+            <Link href="/dashboard/crm/deals" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ver pipeline</Link>
           </div>
           <div className="divide-y divide-neutral-50">
             {RECENT_DEALS.map((deal, i) => (
@@ -378,7 +380,7 @@ export default function DashboardPage() {
               <p className="text-[11px] text-neutral-400">Servicio de Impuestos Internos</p>
             </div>
           </div>
-          <a href="/dashboard/sii" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ir a SII</a>
+          <Link href="/dashboard/sii" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ir a SII</Link>
         </div>
         <div className="grid grid-cols-4 gap-4">
           {SII_ALERTS.map((item, i) => (

@@ -81,6 +81,8 @@ const MOCK_RECIBIDAS: FacturaMock[] = [
   { folio: 31892, tipo: 'Factura Afecta', fecha: '2026-04-12', razonSocial: 'Proveedor Tech S.A.', rut: '96.781.230-1', montoNeto: 2100000, iva: 399000, total: 2499000, estado: 'ACEPTADO' },
   { folio: 60023, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'Capacitación Empresarial SpA', rut: '79.003.221-9', montoNeto: 350000, iva: 66500, total: 416500, estado: 'PENDIENTE' },
   { folio: 88192, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'Mantención Equipos Ltda.', rut: '76.892.001-4', montoNeto: 480000, iva: 91200, total: 571200, estado: 'ACEPTADO' },
+  { folio: 10231, tipo: 'Boleta Honorarios', fecha: '2026-04-09', razonSocial: 'Juan Pérez Consultorías', rut: '15.432.876-2', montoNeto: 0, iva: 0, total: 800000, estado: 'ACEPTADO' },
+  { folio: 10445, tipo: 'Boleta Honorarios', fecha: '2026-04-11', razonSocial: 'María González Diseño', rut: '17.654.321-K', montoNeto: 0, iva: 0, total: 450000, estado: 'ACEPTADO' },
 ];
 
 const fmtCLP = (n: number) =>
@@ -106,19 +108,40 @@ const ESTADO_STYLE = {
   PENDIENTE:             { label: 'Pendiente',           class: 'bg-blue-50 text-blue-700 border-blue-200' },
 } as const;
 
-// IVA calculation
+// IVA + PPM + Retenciones calculation (mirrors F29 logic)
+const PPM_RATE = 0.01;               // 1% — Art. 84 a) LIR
+const RETENCION_HONORARIOS = 0.1375; // 13.75% transitorio 2024-2028
+
 function calcIvaResumen() {
   const afectasEmitidas  = MOCK_EMITIDAS.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
   const afectasRecibidas = MOCK_RECIBIDAS.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
   const ivaDebito  = afectasEmitidas.reduce((s, f) => s + f.iva, 0);
   const ivaCredito = afectasRecibidas.reduce((s, f) => s + f.iva, 0);
+  const ventasNetas = afectasEmitidas.reduce((s, f) => s + f.montoNeto, 0);
+
+  // PPM — Pagos Provisionales Mensuales (1% of net sales)
+  const ppm = Math.round(ventasNetas * PPM_RATE);
+
+  // Retención sobre Boletas de Honorarios recibidas (13.75%)
+  const boletasHonorarios = MOCK_RECIBIDAS.filter(f => f.tipo === 'Boleta Honorarios');
+  const baseHonorarios = boletasHonorarios.reduce((s, f) => s + f.total, 0);
+  const retencionHonorarios = Math.round(baseHonorarios * RETENCION_HONORARIOS);
+
+  const ivaAPagar = Math.max(0, ivaDebito - ivaCredito);
+  const remanente = Math.max(0, ivaCredito - ivaDebito);
+  const totalAPagar = ivaAPagar + ppm + retencionHonorarios;
+
   return {
     ivaDebito,
     ivaCredito,
-    ivaAPagar:   Math.max(0, ivaDebito - ivaCredito),
-    remanente:   Math.max(0, ivaCredito - ivaDebito),
-    ventasNetas: afectasEmitidas.reduce((s, f) => s + f.montoNeto, 0),
-    comprasNetas:afectasRecibidas.reduce((s, f) => s + f.montoNeto, 0),
+    ivaAPagar,
+    remanente,
+    ventasNetas,
+    comprasNetas: afectasRecibidas.reduce((s, f) => s + f.montoNeto, 0),
+    ppm,
+    retencionHonorarios,
+    baseHonorarios,
+    totalAPagar,
   };
 }
 
@@ -228,40 +251,68 @@ function IvaPanel() {
         </div>
       </div>
 
-      {/* Result */}
+      {/* IVA Result */}
       <div className={`rounded-xl border-2 p-6 text-center ${hayDeuda ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-2 ${hayDeuda ? 'text-red-600' : 'text-green-600'}">
-          {hayDeuda ? '⚠ IVA a pagar este mes' : '✓ Remanente crédito fiscal'}
+        <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${hayDeuda ? 'text-red-600' : 'text-green-600'}`}>
+          {hayDeuda ? 'IVA a pagar este mes' : 'Remanente credito fiscal'}
         </p>
         <p className={`text-4xl font-bold ${hayDeuda ? 'text-red-700' : 'text-green-700'}`}>
           <SiiMoney v={hayDeuda ? resumen.ivaAPagar : resumen.remanente} />
         </p>
-        <p className={`text-xs mt-2 ${hayDeuda ? 'text-red-500' : 'text-green-500'}`}>
-          {hayDeuda
-            ? 'Vence el día 12 del mes siguiente (o el hábil siguiente)'
-            : 'Se traslada como crédito al mes siguiente'}
-        </p>
+      </div>
+
+      {/* PPM + Retenciones cards */}
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="rounded-xl border border-neutral-100 bg-white p-5">
+          <p className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1">PPM</p>
+          <p className="text-xs text-neutral-500 mb-2">1% de ventas netas (Art. 84 a LIR)</p>
+          <p className="text-2xl font-bold text-neutral-900"><SiiMoney v={resumen.ppm} /></p>
+        </div>
+        <div className="rounded-xl border border-neutral-100 bg-white p-5">
+          <p className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1">Ret. Honorarios</p>
+          <p className="text-xs text-neutral-500 mb-2">13,75% s/ boletas ({fmtCLP(resumen.baseHonorarios)})</p>
+          <p className="text-2xl font-bold text-neutral-900"><SiiMoney v={resumen.retencionHonorarios} /></p>
+        </div>
+      </div>
+
+      {/* TOTAL A PAGAR (F29 linea final) */}
+      <div className="mt-4 rounded-xl border-2 border-blue-300 bg-blue-50 p-6 text-center">
+        <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-2">Total a declarar y pagar</p>
+        <p className="text-4xl font-bold text-blue-800"><SiiMoney v={resumen.totalAPagar} /></p>
+        <p className="text-xs text-blue-500 mt-2">Vence el dia 12 del mes siguiente (o el habil siguiente)</p>
       </div>
 
       {/* Formula explanation */}
       <div className="mt-5 rounded-xl bg-neutral-50 border border-neutral-100 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">Cálculo</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">Desglose F29</p>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-neutral-600">IVA Débito Fiscal</span>
+            <span className="text-neutral-600">IVA Debito Fiscal</span>
             <span className="font-mono font-semibold text-neutral-900"><SiiMoney v={resumen.ivaDebito} /></span>
           </div>
           <div className="flex justify-between">
-            <span className="text-neutral-600">− IVA Crédito Fiscal</span>
+            <span className="text-neutral-600">- IVA Credito Fiscal</span>
             <span className="font-mono font-semibold text-neutral-900">(<SiiMoney v={resumen.ivaCredito} />)</span>
           </div>
-          <div className="border-t border-neutral-200 pt-2 flex justify-between font-bold">
-            <span className={hayDeuda ? 'text-red-700' : 'text-green-700'}>
-              {hayDeuda ? 'IVA a pagar' : 'Remanente crédito'}
+          <div className="border-t border-dashed border-neutral-200 pt-2 flex justify-between">
+            <span className={`font-semibold ${hayDeuda ? 'text-red-700' : 'text-green-700'}`}>
+              = {hayDeuda ? 'IVA a pagar' : 'Remanente credito'}
             </span>
-            <span className={`font-mono ${hayDeuda ? 'text-red-700' : 'text-green-700'}`}>
+            <span className={`font-mono font-semibold ${hayDeuda ? 'text-red-700' : 'text-green-700'}`}>
               <SiiMoney v={hayDeuda ? resumen.ivaAPagar : resumen.remanente} />
             </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-neutral-600">+ PPM (1% ventas netas)</span>
+            <span className="font-mono font-semibold text-neutral-900"><SiiMoney v={resumen.ppm} /></span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-neutral-600">+ Retencion Honorarios (13,75%)</span>
+            <span className="font-mono font-semibold text-neutral-900"><SiiMoney v={resumen.retencionHonorarios} /></span>
+          </div>
+          <div className="border-t-2 border-neutral-300 pt-2 flex justify-between font-bold">
+            <span className="text-blue-800">Total a Pagar</span>
+            <span className="font-mono text-blue-800"><SiiMoney v={resumen.totalAPagar} /></span>
           </div>
         </div>
       </div>
@@ -311,11 +362,13 @@ export default function SiiPage() {
     if (!password) { setAuthError('Ingresa tu contraseña.'); return; }
     setLoading(true);
     setAuthError('');
+    // Capture rutInput NOW before the async delay (avoids stale closure)
+    const capturedRut = rutInput;
     // Simulate SII authentication (in prod: POST /api/sii/auth)
     await new Promise(r => setTimeout(r, 1200));
     setLoading(false);
     // In dev: always succeed
-    setSessionRut(rutInput);
+    setSessionRut(capturedRut);
     setPassword(''); // clear immediately
     setStep('dashboard');
   };
@@ -323,10 +376,12 @@ export default function SiiPage() {
   const handleOAuth = () => {
     // In production: redirect to https://accounts.claveunica.gob.cl/openid/...
     // For dev: simulate success after delay
+    // Capture rutInput NOW before the async delay (avoids stale closure)
+    const capturedRut = rutInput;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      setSessionRut(rutInput);
+      setSessionRut(capturedRut);
       setStep('dashboard');
     }, 1500);
   };

@@ -50,10 +50,26 @@ export class CreateCrmRecordUseCase {
     };
 
     // --- Deduplication Check ---
+    // AUDIT FIX #3: Pass structured hints so the repository can use
+    // pg_trgm indexed queries instead of loading ALL records into memory.
     if (dto.objectType === 'contacts' && dto.properties['email']) {
       const email = String(dto.properties['email']);
-      const candidates = await this.repo.findCandidatesForDedup(tenantId, 'contacts', email);
-      const companies = await this.repo.findCandidatesForDedup(tenantId, 'companies');
+      const firstName = dto.properties['first_name'] as string | undefined;
+      const lastName = dto.properties['last_name'] as string | undefined;
+      const phone = dto.properties['phone'] as string | undefined;
+      const emailDomain = email.split('@')[1];
+
+      const candidates = await this.repo.findCandidatesForDedup(
+        tenantId, 'contacts', email, undefined,
+        { email, firstName, lastName, phoneDigits: phone?.replace(/\D/g, '') },
+        50, // max 50 candidates
+      );
+
+      const companies = await this.repo.findCandidatesForDedup(
+        tenantId, 'companies', undefined, emailDomain,
+        { companyName: emailDomain },
+        20, // fewer candidates needed for company association
+      );
 
       const existingContacts: ExistingRecord[] = candidates.map((c) => ({
         id: c.id.toString(),
@@ -118,7 +134,12 @@ export class CreateCrmRecordUseCase {
 
     if (dto.objectType === 'companies' && dto.properties['domain']) {
       const domain = String(dto.properties['domain']);
-      const candidates = await this.repo.findCandidatesForDedup(tenantId, 'companies', undefined, domain);
+      // AUDIT FIX #3: Hint-based filtering for company dedup
+      const candidates = await this.repo.findCandidatesForDedup(
+        tenantId, 'companies', undefined, domain,
+        { companyName: dto.properties['name'] as string | undefined },
+        30,
+      );
 
       const existingCompanies: ExistingRecord[] = candidates.map((c) => ({
         id: c.id.toString(),

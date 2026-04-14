@@ -3,6 +3,7 @@ import {
   ICrmRecordRepository,
   CrmRecordListQuery,
   CrmRecordListResult,
+  DedupSearchHints,
 } from '../../domain/repositories/ICrmRecordRepository';
 import { CrmRecord, PropertySource } from '../../domain/entities/CrmRecord';
 
@@ -127,15 +128,128 @@ export class InMemoryCrmRecordRepository implements ICrmRecordRepository {
     }
   }
 
+  /**
+   * AUDIT FIX #3: Optimized candidate pre-filtering.
+   *
+   * In-memory implementation simulates what PostgreSQL pg_trgm would do:
+   * 1. First narrows by tenant + objectType + not archived (base filter).
+   * 2. Then applies hint-based scoring to rank candidates.
+   * 3. Returns only the top `maxCandidates` (default 50).
+   *
+   * In production (PostgreSQL), this becomes a single SQL query:
+   *   WHERE tenant_id = $1 AND object_type = $2
+   *     AND (email = $3 OR similarity(first_name, $4) > 0.3 OR ...)
+   *   ORDER BY similarity DESC LIMIT 50;
+   */
   async findCandidatesForDedup(
     tenantId: string,
     objectType: string,
     email?: string,
     domain?: string,
+    hints?: DedupSearchHints,
+    maxCandidates: number = 50,
   ): Promise<CrmRecord[]> {
-    return Array.from(this.records.values()).filter(
+    // Base filter (cheap — tenant + type + not archived)
+    const base = Array.from(this.records.values()).filter(
       (r) => r.tenantId === tenantId && r.objectType === objectType && !r.archived,
     );
+
+    // If no hints provided, fall back to old behavior (backwards-compatible)
+    if (!hints) return base.slice(0, maxCandidates);
+
+    const threshold = hints.similarityThreshold ?? 0.3;
+
+    // Score each record by how likely it is to be a candidate
+    const scored = base.map((record) => {
+      let score = 0;
+
+      // Exact email match — highest signal
+      if (hints.email && record.email) {
+        if (record.email.toLowerCase() === hints.email.toLowerCase()) {
+          score += 1.0;
+        } else {
+          // Same domain
+          const hintDomain = hints.email.split('@')[1];
+          const recDomain = record.email.split('@')[1];
+          if (hintDomain && recDomain && hintDomain === recDomain) {
+            score += 0.5;
+          }
+        }
+      }
+
+      // Name trigram simulation (in PG this would be similarity())
+      const recFirstName = (record.getPropertyValue('first_name') as string ?? '').toLowerCase();
+      const recLastName = (record.getPropertyValue('last_name') as string ?? '').toLowerCase();
+
+      if (hints.firstName) {
+        const sim = this.trigramSimilarity(hints.firstName.toLowerCase(), recFirstName);
+        if (sim >= threshold) score += sim * 0.3;
+      }
+      if (hints.lastName) {
+        const sim = this.trigramSimilarity(hints.lastName.toLowerCase(), recLastName);
+        if (sim >= threshold) score += sim * 0.4;
+      }
+
+      // Company name similarity
+      if (hints.companyName) {
+        const recCompany = (record.getPropertyValue('company') as string ?? '').toLowerCase();
+        if (recCompany) {
+          const sim = this.trigramSimilarity(hints.companyName.toLowerCase(), recCompany);
+          if (sim >= threshold) score += sim * 0.2;
+        }
+      }
+
+      // Phone suffix match
+      if (hints.phoneDigits) {
+        const recPhone = (record.getPropertyValue('phone') as string ?? '').replace(/\D/g, '');
+        if (recPhone && recPhone.endsWith(hints.phoneDigits.slice(-7))) {
+          score += 0.6;
+        }
+      }
+
+      return { record, score };
+    });
+
+    // Return only candidates with score > 0, sorted by score, limited
+    return scored
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxCandidates)
+      .map((s) => s.record);
+  }
+
+  /**
+   * Simulates PostgreSQL pg_trgm similarity() function.
+   * Splits strings into character trigrams and computes Jaccard similarity.
+   * In production, this runs as a GIN-indexed SQL operator.
+   */
+  private trigramSimilarity(a: string, b: string): number {
+    if (!a || !b) return 0;
+    if (a === b) return 1.0;
+
+    const trigramsA = this.extractTrigrams(a);
+    const trigramsB = this.extractTrigrams(b);
+
+    if (trigramsA.size === 0 && trigramsB.size === 0) return 1.0;
+    if (trigramsA.size === 0 || trigramsB.size === 0) return 0;
+
+    let intersection = 0;
+    for (const t of trigramsA) {
+      if (trigramsB.has(t)) intersection++;
+    }
+
+    // Jaccard coefficient
+    const union = trigramsA.size + trigramsB.size - intersection;
+    return union > 0 ? intersection / union : 0;
+  }
+
+  private extractTrigrams(s: string): Set<string> {
+    const padded = `  ${s} `;
+    const trigrams = new Set<string>();
+    for (let i = 0; i <= padded.length - 3; i++) {
+      trigrams.add(padded.substring(i, i + 3));
+    }
+    return trigrams;
   }
 
   // ---------------------------------------------------------------------------

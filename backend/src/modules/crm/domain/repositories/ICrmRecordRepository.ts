@@ -59,11 +59,48 @@ export interface ICrmRecordRepository {
   /** Hard-delete a record (admin only) */
   delete(tenantId: string, recordId: string): Promise<void>;
 
-  /** Find candidate records for dedup (by objectType within tenant) */
+  /**
+   * AUDIT FIX #3: Optimized candidate pre-filtering for dedup.
+   *
+   * Instead of returning ALL records (which blocks the Event Loop at scale),
+   * this method now accepts structured hints so the implementation can
+   * leverage database-level filtering (e.g. pg_trgm trigram index).
+   *
+   * The repository returns a SMALL batch of "probable candidates"
+   * (typically <50 records), which are then scored in-memory by the
+   * EntityResolutionService. This reduces O(N) full-table scans to
+   * O(k) where k << N.
+   *
+   * @param hints  Structured search hints from the incoming record.
+   * @param maxCandidates  Maximum candidates to return (default 50).
+   */
   findCandidatesForDedup(
     tenantId: string,
     objectType: string,
     email?: string,
     domain?: string,
+    hints?: DedupSearchHints,
+    maxCandidates?: number,
   ): Promise<CrmRecord[]>;
+}
+
+/**
+ * Structured hints for candidate pre-filtering.
+ * Each field allows the repository to use indexed queries
+ * (trigram similarity, exact match, domain match) to narrow
+ * the candidate set before expensive in-memory comparison.
+ */
+export interface DedupSearchHints {
+  /** First name for trigram similarity search */
+  firstName?: string;
+  /** Last name for trigram similarity search */
+  lastName?: string;
+  /** Full email for exact/domain match */
+  email?: string;
+  /** Normalized phone digits for suffix match */
+  phoneDigits?: string;
+  /** Company name for trigram similarity */
+  companyName?: string;
+  /** Minimum trigram similarity threshold (0-1, default 0.3) */
+  similarityThreshold?: number;
 }

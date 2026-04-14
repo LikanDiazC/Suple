@@ -194,15 +194,16 @@ function getAvatarGradient(email: string): string {
     'from-amber-400 to-amber-600',
     'from-indigo-400 to-indigo-600',
   ];
-  const hash = email.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hash = (email ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return colors[hash % colors.length];
 }
 
 function getInitials(name: string): string {
+  if (!name) return '?';
   const parts = name.split(' ').filter(Boolean);
   return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase();
+    ? ((parts[0][0] ?? '') + (parts[1][0] ?? '')).toUpperCase()
+    : name.slice(0, 2).toUpperCase() || '?';
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +379,7 @@ export default function InboxPage() {
     if (!isLoadingInbox && realInbox.length > 0) {
       const converted: MockEmail[] = realInbox.map((msg: GmailMessage, idx: number) => ({
         id: msg.id || `real-${idx}`,
-        from: { name: msg.from, email: msg.fromEmail },
+        from: { name: msg.from || msg.fromEmail || 'Desconocido', email: msg.fromEmail || '' },
         subject: msg.subject,
         preview: msg.snippet,
         body: msg.snippet,
@@ -386,8 +387,8 @@ export default function InboxPage() {
         read: !msg.isUnread,
         starred: msg.isStarred,
         folder: 'inbox' as const,
-        companyDomain: msg.fromEmail.split('@')[1] || '',
-        companyName: msg.fromEmail.split('@')[1]?.split('.')[0] || '',
+        companyDomain: msg.fromEmail?.split('@')[1] || '',
+        companyName: msg.fromEmail?.split('@')[1]?.split('.')[0] || '',
       }));
       setEmails(converted);
       setUsingRealData(true);
@@ -481,7 +482,7 @@ export default function InboxPage() {
             <div className="h-2 w-2 rounded-full bg-green-500" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Conectado</span>
           </div>
-          <p className="text-[11px] text-neutral-600 font-medium truncate">{user.email}</p>
+          <p className="text-[11px] text-neutral-600 font-medium truncate">{user?.email ?? 'Sin sesión'}</p>
           <p className="text-[10px] text-neutral-400 mt-0.5">Google Workspace</p>
         </div>
       </div>

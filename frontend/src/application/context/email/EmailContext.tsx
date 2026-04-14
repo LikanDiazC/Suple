@@ -73,10 +73,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         setInbox([]);
         return;
       }
-      if (!res.ok) throw new Error('Failed to fetch inbox');
+      if (!res.ok) throw new Error(`Failed to fetch inbox: ${res.status}`);
       const data = await res.json();
       setInbox(Array.isArray(data) ? data : data.messages ?? []);
-    } catch {
+    } catch (err) {
+      console.error('[EmailContext] fetchInbox error:', err);
       setInbox([]);
     } finally {
       setIsLoadingInbox(false);
@@ -90,20 +91,25 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
         setStarred([]);
         return;
       }
-      if (!res.ok) throw new Error('Failed to fetch starred');
+      if (!res.ok) throw new Error(`Failed to fetch starred: ${res.status}`);
       const data = await res.json();
       setStarred(Array.isArray(data) ? data : data.messages ?? []);
-    } catch {
+    } catch (err) {
+      console.error('[EmailContext] fetchStarred error:', err);
       setStarred([]);
     }
   }, []);
 
   const sendEmail = useCallback(async (data: ComposeData & { from: string }) => {
-    await fetch('/api/gmail/send', {
+    const res = await fetch('/api/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error ?? `Send failed: ${res.status}`);
+    }
   }, []);
 
   useEffect(() => {

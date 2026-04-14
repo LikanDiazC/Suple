@@ -267,7 +267,7 @@ export default function FormsPage() {
             </pre>
             <div className="flex gap-2 mt-4">
               <button
-                onClick={() => navigator.clipboard.writeText(`<script src="https://forms.empresa.com/embed.js" data-form-id="${embedForm.id}" data-theme="light" data-lang="es"></script>`)}
+                onClick={() => navigator.clipboard?.writeText(`<script src="https://forms.empresa.com/embed.js" data-form-id="${embedForm.id}" data-theme="light" data-lang="es"></script>`).catch(() => {})}
                 className="flex-1 rounded-lg bg-primary-500 py-2 text-sm font-semibold text-white hover:bg-primary-600 transition-colors"
               >
                 Copiar código
