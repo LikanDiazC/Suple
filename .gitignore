@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+
+# Next.js compilación y caché
+frontend/.next/
+frontend/out/
+
+# NestJS compilación
+backend/dist/
+backend/node_modules/
+
+# Variables de entorno (Seguridad)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS de archivos
+.DS_Store
+Thumbs.db
+
+# Otros
+.claude/
+*.tsbuildinfo
