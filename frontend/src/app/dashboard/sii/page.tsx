@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../presentation/animations/variants';
 
@@ -85,6 +85,53 @@ const MOCK_RECIBIDAS: FacturaMock[] = [
   { folio: 10445, tipo: 'Boleta Honorarios', fecha: '2026-04-11', razonSocial: 'María González Diseño', rut: '17.654.321-K', montoNeto: 0, iva: 0, total: 450000, estado: 'ACEPTADO' },
 ];
 
+// ---------------------------------------------------------------------------
+// API ↔ Mock adapter (maps backend FacturaDto to FacturaMock for the UI)
+// ---------------------------------------------------------------------------
+
+interface FacturaApiDto {
+  folio: number;
+  tipoDocumento: string;
+  fechaEmision: string;
+  rutEmisor: string;
+  razonSocialEmisor: string;
+  rutReceptor: string;
+  razonSocialReceptor: string;
+  montoNeto: number;
+  iva: number;
+  montoTotal: number;
+  estado: 'ACEPTADO' | 'ACEPTADO_CON_REPAROS' | 'RECHAZADO' | 'PENDIENTE';
+  glosa?: string;
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  FACTURA_AFECTA:           'Factura Afecta',
+  FACTURA_NO_AFECTA:        'Factura No Afecta',
+  BOLETA_ELECTRONICA:       'Boleta Electrónica',
+  BOLETA_NO_AFECTA:         'Boleta No Afecta',
+  LIQUIDACION:              'Liquidación',
+  FACTURA_COMPRA:           'Factura de Compra',
+  NOTA_DEBITO:              'Nota de Débito',
+  NOTA_CREDITO:             'Nota de Crédito',
+  BOLETA_HONORARIOS:        'Boleta Honorarios',
+  BOLETA_HONORARIOS_EXENTA: 'Boleta Honorarios Exenta',
+};
+
+function mapApiToMock(dto: FacturaApiDto, tipo: 'emitidas' | 'recibidas'): FacturaMock {
+  return {
+    folio: dto.folio,
+    tipo: TIPO_LABEL[dto.tipoDocumento] ?? dto.tipoDocumento,
+    fecha: dto.fechaEmision,
+    // For emitidas show who you invoiced (receptor); for recibidas show who invoiced you (emisor)
+    razonSocial: tipo === 'emitidas' ? dto.razonSocialReceptor : dto.razonSocialEmisor,
+    rut: tipo === 'emitidas' ? dto.rutReceptor : dto.rutEmisor,
+    montoNeto: dto.montoNeto,
+    iva: dto.iva,
+    total: dto.montoTotal,
+    estado: dto.estado,
+  };
+}
+
 const fmtCLP = (n: number) =>
   new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(n);
 
@@ -112,9 +159,9 @@ const ESTADO_STYLE = {
 const PPM_RATE = 0.01;               // 1% — Art. 84 a) LIR
 const RETENCION_HONORARIOS = 0.1375; // 13.75% transitorio 2024-2028
 
-function calcIvaResumen() {
-  const afectasEmitidas  = MOCK_EMITIDAS.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
-  const afectasRecibidas = MOCK_RECIBIDAS.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
+function calcIvaResumen(emitidas: FacturaMock[], recibidas: FacturaMock[]) {
+  const afectasEmitidas  = emitidas.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
+  const afectasRecibidas = recibidas.filter(f => f.tipo === 'Factura Afecta' && f.iva > 0);
   const ivaDebito  = afectasEmitidas.reduce((s, f) => s + f.iva, 0);
   const ivaCredito = afectasRecibidas.reduce((s, f) => s + f.iva, 0);
   const ventasNetas = afectasEmitidas.reduce((s, f) => s + f.montoNeto, 0);
@@ -123,7 +170,7 @@ function calcIvaResumen() {
   const ppm = Math.round(ventasNetas * PPM_RATE);
 
   // Retención sobre Boletas de Honorarios recibidas (13.75%)
-  const boletasHonorarios = MOCK_RECIBIDAS.filter(f => f.tipo === 'Boleta Honorarios');
+  const boletasHonorarios = recibidas.filter(f => f.tipo === 'Boleta Honorarios');
   const baseHonorarios = boletasHonorarios.reduce((s, f) => s + f.total, 0);
   const retencionHonorarios = Math.round(baseHonorarios * RETENCION_HONORARIOS);
 
@@ -218,8 +265,8 @@ function FacturaTable({ facturas, tipo }: { facturas: FacturaMock[]; tipo: 'emit
 // IVA Panel (F29 preview)
 // ---------------------------------------------------------------------------
 
-function IvaPanel() {
-  const resumen = calcIvaResumen();
+function IvaPanel({ emitidas, recibidas }: { emitidas: FacturaMock[]; recibidas: FacturaMock[] }) {
+  const resumen = calcIvaResumen(emitidas, recibidas);
   const hayDeuda = resumen.ivaAPagar > 0;
 
   return (
@@ -346,6 +393,12 @@ export default function SiiPage() {
   const [sessionRut, setSessionRut] = useState('');
   const [periodo, setPeriodo]       = useState('202604');
 
+  // Real facturas fetched from the backend (fall back to mock data on error)
+  const [emitidas, setEmitidas]           = useState<FacturaMock[]>([]);
+  const [recibidas, setRecibidas]         = useState<FacturaMock[]>([]);
+  const [loadingFacturas, setLoadingFacturas] = useState(false);
+  const [fetchError, setFetchError]       = useState('');
+
   const handleRutChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw     = e.target.value.replace(/[^0-9kK]/g, '');
     const trimmed = raw.slice(0, 9);
@@ -362,38 +415,105 @@ export default function SiiPage() {
     if (!password) { setAuthError('Ingresa tu contraseña.'); return; }
     setLoading(true);
     setAuthError('');
-    // Capture rutInput NOW before the async delay (avoids stale closure)
-    const capturedRut = rutInput;
-    // Simulate SII authentication (in prod: POST /api/sii/auth)
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    // In dev: always succeed
-    setSessionRut(capturedRut);
-    setPassword(''); // clear immediately
-    setStep('dashboard');
+    const capturedRut = rutInput; // capture before any await (avoids stale closure)
+    try {
+      const res = await fetch('/api/sii/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rut: capturedRut, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data?.error ?? 'Error al autenticar con el SII. Verifica tus credenciales.');
+        return;
+      }
+      setSessionRut(data.rutMasked ?? capturedRut);
+      setPassword(''); // clear credentials immediately
+      setStep('dashboard');
+    } catch {
+      setAuthError('Error de conexión. Verifica que el servidor backend esté activo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOAuth = () => {
-    // In production: redirect to https://accounts.claveunica.gob.cl/openid/...
-    // For dev: simulate success after delay
-    // Capture rutInput NOW before the async delay (avoids stale closure)
-    const capturedRut = rutInput;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSessionRut(capturedRut);
-      setStep('dashboard');
-    }, 1500);
+    // Clave Única OAuth: In production this redirects to the government OAuth portal.
+    // The SII backend currently only supports Clave Tributaria (password-based auth).
+    // Show an informative message instead of simulating success.
+    setAuthError('Clave Única aún no está habilitada. Usa Clave Tributaria por ahora.');
   };
 
   const logout = () => {
+    // Clear session cookies server-side
+    fetch('/api/sii/auth', { method: 'DELETE' }).catch(() => {});
     setStep('rut');
     setRutInput('');
     setRutValid(null);
     setPassword('');
     setSessionRut('');
     setAuthError('');
+    setEmitidas([]);
+    setRecibidas([]);
+    setFetchError('');
   };
+
+  // Fetch real facturas whenever the dashboard step is active or the period changes
+  useEffect(() => {
+    if (step !== 'dashboard') return;
+
+    let cancelled = false;
+
+    const loadFacturas = async () => {
+      setLoadingFacturas(true);
+      setFetchError('');
+
+      try {
+        const [resE, resR] = await Promise.all([
+          fetch(`/api/sii/auth?tipo=emitidas&periodo=${periodo}`, { cache: 'no-store' }),
+          fetch(`/api/sii/auth?tipo=recibidas&periodo=${periodo}`, { cache: 'no-store' }),
+        ]);
+
+        if (cancelled) return;
+
+        // Session expired — go back to login
+        if (resE.status === 401 || resR.status === 401) {
+          setStep('rut');
+          setSessionRut('');
+          return;
+        }
+
+        const [dataE, dataR] = await Promise.all([
+          resE.ok ? resE.json() : Promise.resolve({ facturas: [] }),
+          resR.ok ? resR.json() : Promise.resolve({ facturas: [] }),
+        ]);
+
+        if (cancelled) return;
+
+        const mappedE: FacturaMock[] = (dataE.facturas ?? []).map(
+          (f: FacturaApiDto) => mapApiToMock(f, 'emitidas'),
+        );
+        const mappedR: FacturaMock[] = (dataR.facturas ?? []).map(
+          (f: FacturaApiDto) => mapApiToMock(f, 'recibidas'),
+        );
+
+        // Use real data if available, otherwise fall back to mock for display
+        setEmitidas(mappedE.length > 0 ? mappedE : MOCK_EMITIDAS);
+        setRecibidas(mappedR.length > 0 ? mappedR : MOCK_RECIBIDAS);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[SII] Error fetching facturas:', err);
+        setFetchError('No se pudo conectar al servidor. Mostrando datos de ejemplo.');
+        setEmitidas(MOCK_EMITIDAS);
+        setRecibidas(MOCK_RECIBIDAS);
+      } finally {
+        if (!cancelled) setLoadingFacturas(false);
+      }
+    };
+
+    loadFacturas();
+    return () => { cancelled = true; };
+  }, [step, periodo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.div
@@ -516,7 +636,7 @@ export default function SiiPage() {
                 ].map(m => (
                   <button
                     key={m.key}
-                    onClick={() => setAuthMethod(m.key)}
+                    onClick={() => { setAuthMethod(m.key); setAuthError(''); }}
                     className={`rounded-xl border-2 p-3 text-left transition-all ${
                       authMethod === m.key ? 'border-blue-500 bg-blue-50' : 'border-neutral-200 hover:border-neutral-300'
                     }`}
@@ -556,6 +676,7 @@ export default function SiiPage() {
                       <>🇨🇱 Autenticar con Clave Única</>
                     )}
                   </button>
+                  {authError && <p className="text-xs text-red-600 mt-3">{authError}</p>}
                 </div>
               )}
 
@@ -668,12 +789,12 @@ export default function SiiPage() {
               className="grid grid-cols-4 gap-4"
             >
               {(() => {
-                const resumen = calcIvaResumen();
-                const totalEmitidas = MOCK_EMITIDAS.reduce((s, f) => s + f.total, 0);
-                const totalRecibidas = MOCK_RECIBIDAS.reduce((s, f) => s + f.total, 0);
+                const resumen = calcIvaResumen(emitidas, recibidas);
+                const totalEmitidas = emitidas.reduce((s, f) => s + f.total, 0);
+                const totalRecibidas = recibidas.reduce((s, f) => s + f.total, 0);
                 return [
-                  { label: 'Facturación emitida',  amount: totalEmitidas,             sub: `${MOCK_EMITIDAS.length} documentos`,  color: 'text-blue-600' },
-                  { label: 'Compras recibidas',     amount: totalRecibidas,            sub: `${MOCK_RECIBIDAS.length} documentos`, color: 'text-neutral-900' },
+                  { label: 'Facturación emitida',  amount: totalEmitidas,             sub: `${emitidas.length} documentos`,  color: 'text-blue-600' },
+                  { label: 'Compras recibidas',     amount: totalRecibidas,            sub: `${recibidas.length} documentos`, color: 'text-neutral-900' },
                   { label: 'IVA débito fiscal',     amount: resumen.ivaDebito,         sub: '19% sobre ventas afectas',           color: 'text-orange-600' },
                   { label: resumen.ivaAPagar > 0 ? 'IVA a pagar' : 'Remanente crédito',
                     amount: resumen.ivaAPagar || resumen.remanente,
@@ -695,8 +816,8 @@ export default function SiiPage() {
             <div className="bg-white rounded-xl border border-neutral-100 shadow-sm overflow-hidden">
               <div className="flex border-b border-neutral-200">
                 {[
-                  { key: 'emitidas'  as FacturaTab, label: `Facturas Emitidas (${MOCK_EMITIDAS.length})` },
-                  { key: 'recibidas' as FacturaTab, label: `Facturas Recibidas (${MOCK_RECIBIDAS.length})` },
+                  { key: 'emitidas'  as FacturaTab, label: `Facturas Emitidas (${emitidas.length})` },
+                  { key: 'recibidas' as FacturaTab, label: `Facturas Recibidas (${recibidas.length})` },
                   { key: 'iva'       as FacturaTab, label: 'Declaración F29' },
                 ].map(tab => (
                   <button
@@ -711,25 +832,49 @@ export default function SiiPage() {
                     {tab.label}
                   </button>
                 ))}
-                {/* Data freshness indicator */}
-                <div className="ml-auto flex items-center px-4 text-[11px] text-neutral-400 gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-                  Datos al {new Date().toLocaleDateString('es-CL', { day:'numeric', month:'long' })}
+                {/* Data freshness / error indicator */}
+                <div className="ml-auto flex items-center px-4 text-[11px] gap-1.5">
+                  {fetchError ? (
+                    <span className="text-amber-600 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                      {fetchError}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400 flex items-center gap-1">
+                      <span className={`h-1.5 w-1.5 rounded-full ${loadingFacturas ? 'bg-blue-400 animate-pulse' : 'bg-green-400'}`} />
+                      {loadingFacturas ? 'Cargando datos...' : `Datos al ${new Date().toLocaleDateString('es-CL', { day:'numeric', month:'long' })}`}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {activeTab === 'emitidas'  && <FacturaTable facturas={MOCK_EMITIDAS}  tipo="emitidas" />}
-                  {activeTab === 'recibidas' && <FacturaTable facturas={MOCK_RECIBIDAS} tipo="recibidas" />}
-                  {activeTab === 'iva'       && <IvaPanel />}
-                </motion.div>
+                {loadingFacturas ? (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center justify-center gap-3 py-16 text-neutral-400"
+                  >
+                    <svg className="animate-spin" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="10" cy="10" r="8" strokeDasharray="30" strokeDashoffset="15"/>
+                    </svg>
+                    <span className="text-sm">Obteniendo datos del SII...</span>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {activeTab === 'emitidas'  && <FacturaTable facturas={emitidas}  tipo="emitidas" />}
+                    {activeTab === 'recibidas' && <FacturaTable facturas={recibidas} tipo="recibidas" />}
+                    {activeTab === 'iva'       && <IvaPanel emitidas={emitidas} recibidas={recibidas} />}
+                  </motion.div>
+                )}
               </AnimatePresence>
             </div>
 

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-    if (!token?.accessToken) {
+    if (!token?.accessToken || token.error === 'RefreshAccessTokenError') {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401, headers: { 'Cache-Control': 'no-store' } },

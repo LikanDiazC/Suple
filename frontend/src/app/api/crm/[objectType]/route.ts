@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { google } from 'googleapis';
+import { getOAuth2Client } from '@/lib/google';
 
 /**
  * Dynamic API route for CRM object records.
  * GET /api/crm/contacts?page=1&limit=25&sort=create_date&order=desc&search=...
  * GET /api/crm/companies?page=1&limit=25
+ *
+ * Uses Google People API when a valid Google session is available.
+ * Falls back to hardcoded demo data when not authenticated.
  */
 
-const CONTACTS = [
+// ---------------------------------------------------------------------------
+// Fallback demo data (used when Google session is unavailable)
+// ---------------------------------------------------------------------------
+
+const CONTACTS_FALLBACK = [
   { id: 'c1', properties: { first_name: 'UDLA | Universidad d...', last_name: '', email: 'admision@udla.cl', phone: '', lead_status: '', content_topics: '', preferred_channels: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-01-14T11:04:00Z' }},
   { id: 'c2', properties: { first_name: 'App Copec', last_name: '', email: 'contacto@appcopec.com', phone: '', lead_status: '', content_topics: '', preferred_channels: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-03-28T16:18:00Z' }},
   { id: 'c3', properties: { first_name: 'Tom Turpel', last_name: 'from AVEVA', email: 'webseminars@aveva.com', phone: '', lead_status: '', content_topics: '', preferred_channels: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-01-16T13:03:00Z' }},
@@ -23,7 +33,7 @@ const CONTACTS = [
   { id: 'c14', properties: { first_name: 'Napkin', last_name: 'AI', email: 'contact@napkin.ai', phone: '', lead_status: '', content_topics: '', preferred_channels: '', create_date: '2026-03-25T17:31:00Z', last_activity: '2026-04-09T09:39:00Z' }},
 ];
 
-const COMPANIES = [
+const COMPANIES_FALLBACK = [
   { id: 'co1', properties: { name: 'University of Las Americas', domain: 'udla.cl', owner_id: 'Sin propietario', phone: '', city: '', lead_status: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-01-14T11:04:00Z' }},
   { id: 'co2', properties: { name: '--', domain: '', owner_id: 'Sin propietario', phone: '', city: '', lead_status: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-03-28T16:18:00Z' }},
   { id: 'co3', properties: { name: 'AVEVA Group plc', domain: 'aveva.com', owner_id: 'Sin propietario', phone: '', city: '', lead_status: '', create_date: '2026-03-25T17:32:00Z', last_activity: '2026-01-16T13:03:00Z' }},
@@ -37,6 +47,16 @@ const COMPANIES = [
   { id: 'co11', properties: { name: 'BancoEstado', domain: 'bancoestado.cl', owner_id: 'Sin propietario', phone: '', city: '', lead_status: '', create_date: '2026-03-25T17:31:00Z', last_activity: '2026-02-18T09:22:00Z' }},
 ];
 
+// Personal / generic email domains — skip these when inferring companies from email
+const PERSONAL_DOMAINS = new Set([
+  'gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com',
+  'icloud.com', 'live.com', 'msn.com', 'me.com',
+]);
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ objectType: string }> },
@@ -49,10 +69,131 @@ export async function GET(
   const sortBy = url.searchParams.get('sort') ?? 'create_date';
   const order = url.searchParams.get('order') ?? 'desc';
 
-  let records: { id: string; properties: Record<string, string> }[] =
-    objectType === 'contacts' ? CONTACTS : objectType === 'companies' ? COMPANIES : [];
+  let records: { id: string; properties: Record<string, string> }[] = [];
 
-  // Search filter
+  // ── Try Google People API when user is authenticated ──────────────────────
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+
+  if (token?.accessToken && (objectType === 'contacts' || objectType === 'companies')) {
+    try {
+      const oauth2Client = getOAuth2Client(token.accessToken as string);
+      const people = google.people({ version: 'v1', auth: oauth2Client });
+
+      const res = await people.people.connections.list({
+        resourceName: 'people/me',
+        personFields: 'names,emailAddresses,phoneNumbers,organizations,metadata',
+        pageSize: 500,
+      });
+
+      const connections = res.data.connections ?? [];
+      const now = new Date().toISOString();
+
+      if (objectType === 'contacts') {
+        records = connections.map((person, i) => {
+          const displayName = person.names?.[0]?.displayName ?? '';
+          const nameParts = displayName.trim().split(/\s+/);
+          const firstName = nameParts[0] ?? '';
+          const lastName = nameParts.slice(1).join(' ');
+          const email = person.emailAddresses?.[0]?.value ?? '';
+          const phone = person.phoneNumbers?.[0]?.value ?? '';
+          // Use the most recent source update time as last_activity
+          const lastActivity =
+            person.metadata?.sources?.sort((a, b) =>
+              (b.updateTime ?? '').localeCompare(a.updateTime ?? ''),
+            )?.[0]?.updateTime ?? now;
+
+          return {
+            id: `google_c_${i}`,
+            properties: {
+              first_name: firstName,
+              last_name: lastName,
+              email,
+              phone,
+              lead_status: '',
+              content_topics: '',
+              preferred_channels: '',
+              create_date: now,
+              last_activity: lastActivity,
+            },
+          };
+        });
+      } else {
+        // companies — extract unique organizations + infer from email domains
+        const orgMap = new Map<string, { name: string; domain: string; lastActivity: string }>();
+
+        for (const person of connections) {
+          const email = person.emailAddresses?.[0]?.value ?? '';
+          const domain = email.includes('@') ? email.split('@')[1].toLowerCase() : '';
+          const lastActivity =
+            person.metadata?.sources?.sort((a, b) =>
+              (b.updateTime ?? '').localeCompare(a.updateTime ?? ''),
+            )?.[0]?.updateTime ?? now;
+
+          // 1. Named organizations from Google contacts
+          for (const org of person.organizations ?? []) {
+            const name = org.name?.trim();
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (!orgMap.has(key)) {
+              orgMap.set(key, {
+                name,
+                domain: org.domain?.trim() ?? domain,
+                lastActivity,
+              });
+            }
+          }
+
+          // 2. Infer company from professional email domain (no named org found)
+          if (
+            (person.organizations ?? []).length === 0 &&
+            domain &&
+            !PERSONAL_DOMAINS.has(domain)
+          ) {
+            const key = domain;
+            if (!orgMap.has(key)) {
+              // Capitalize the domain prefix as the company name
+              const baseName = domain.split('.')[0];
+              const guessedName =
+                baseName.charAt(0).toUpperCase() + baseName.slice(1);
+              orgMap.set(key, {
+                name: guessedName,
+                domain,
+                lastActivity,
+              });
+            }
+          }
+        }
+
+        records = Array.from(orgMap.values()).map((org, i) => ({
+          id: `google_co_${i}`,
+          properties: {
+            name: org.name,
+            domain: org.domain,
+            owner_id: 'Sin propietario',
+            phone: '',
+            city: '',
+            lead_status: '',
+            create_date: now,
+            last_activity: org.lastActivity,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error(`[CRM] Google People API error for ${objectType}:`, err);
+      // Fall back to demo data on any error
+      records = objectType === 'contacts' ? CONTACTS_FALLBACK : COMPANIES_FALLBACK;
+    }
+  } else {
+    // No Google session — use demo data
+    records =
+      objectType === 'contacts'
+        ? CONTACTS_FALLBACK
+        : objectType === 'companies'
+          ? COMPANIES_FALLBACK
+          : [];
+  }
+
+  // ── Search filter ─────────────────────────────────────────────────────────
   if (search) {
     records = records.filter((r) => {
       const values = Object.values(r.properties).map((v) => String(v).toLowerCase());
@@ -60,13 +201,14 @@ export async function GET(
     });
   }
 
-  // Sort
+  // ── Sort ──────────────────────────────────────────────────────────────────
   records = [...records].sort((a, b) => {
     const aVal = String(a.properties[sortBy] ?? '');
     const bVal = String(b.properties[sortBy] ?? '');
     return order === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
 
+  // ── Paginate ──────────────────────────────────────────────────────────────
   const total = records.length;
   const start = (page - 1) * limit;
   const paged = records.slice(start, start + limit);

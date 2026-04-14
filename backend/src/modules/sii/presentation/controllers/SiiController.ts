@@ -69,13 +69,18 @@ export class SiiController {
   // ---------------------------------------------------------------------------
   // POST /api/sii/auth
   //
-  // AUDIT FIX #2: Strict rate limit — 5 requests per 15 minutes per IP.
-  // This prevents brute-force attacks against Clave Tributaria.
+  // Rate limit: 10 attempts / 15 min in production (strict brute-force guard).
+  // In development the limit is relaxed to 50 / 15 min so testing isn't blocked.
   // ---------------------------------------------------------------------------
 
   @Post('auth')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { ttl: 900_000, limit: 5 } })
+  @Throttle({
+    default: {
+      ttl:   900_000,
+      limit: process.env.NODE_ENV === 'production' ? 10 : 50,
+    },
+  })
   async authenticate(
     @Body() dto: AuthWithSiiDto,
     @Headers('x-forwarded-for') ip?: string,

@@ -1,11 +1,12 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TenantMiddleware } from './modules/iam/infrastructure/middleware/TenantMiddleware';
 import { EventBus } from './infrastructure/messaging/events/EventBus';
 import { KafkaEventProducer } from './infrastructure/messaging/kafka/KafkaProducer';
 import { CrmModule } from './modules/crm/crm.module';
 import { SiiModule } from './modules/sii/sii.module';
+import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
 
 /**
  * ==========================================================================
@@ -48,13 +49,13 @@ import { SiiModule } from './modules/sii/sii.module';
     EventBus,
     KafkaEventProducer,
 
-    // AUDIT FIX #2: Register ThrottlerGuard globally via DI
-    // This ensures ALL routes are rate-limited by default.
-    // Individual controllers/handlers can override with @Throttle()
-    // or skip with @SkipThrottle().
+    // AUDIT FIX #2: Register IpThrottlerGuard globally via DI.
+    // Uses X-Forwarded-For from the Next.js proxy so each end-user
+    // gets their own independent rate-limit bucket (not shared by
+    // the proxy's IP 127.0.0.1).
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: IpThrottlerGuard,
     },
   ],
   exports: [EventBus],

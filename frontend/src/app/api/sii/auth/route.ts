@@ -1,213 +1,171 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 // ---------------------------------------------------------------------------
-// RUT validation (Mod-11 algorithm — Chilean SII standard)
+// GET /api/sii/auth?tipo=emitidas&periodo=202604
+// Reads session cookies and proxies the facturas request to NestJS.
 // ---------------------------------------------------------------------------
 
-function calcDv(body: string): string {
-  let sum = 0;
-  let mul = 2;
-  for (let i = body.length - 1; i >= 0; i--) {
-    sum += parseInt(body[i], 10) * mul;
-    mul = mul === 7 ? 2 : mul + 1;
-  }
-  const r = 11 - (sum % 11);
-  return r === 11 ? '0' : r === 10 ? 'K' : String(r);
-}
-
-function validateRut(raw: string): boolean {
-  const cleaned = raw.replace(/[\.\-\s]/g, '').toUpperCase();
-  if (cleaned.length < 2) return false;
-  const body = cleaned.slice(0, -1);
-  const dv = cleaned.slice(-1);
-  if (!/^\d+$/.test(body)) return false;
-  return dv === calcDv(body);
-}
-
-// ---------------------------------------------------------------------------
-// POST /api/sii/auth
-// ---------------------------------------------------------------------------
-
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { rut, method, password } = body as {
-      rut?: string;
-      method?: 'clave_unica' | 'clave_tributaria';
-      password?: string;
-    };
+    const siiSession = request.cookies.get('sii_session')?.value;
+    const rut = request.cookies.get('sii_rut')?.value;
 
-    // Validate required fields
-    if (!rut || !method) {
+    if (!siiSession || !rut) {
       return NextResponse.json(
-        { error: 'Missing required fields: rut, method' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        { error: 'Not authenticated. Please log in.' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
-    if (method !== 'clave_unica' && method !== 'clave_tributaria') {
+    const { searchParams } = request.nextUrl;
+    const tipo = searchParams.get('tipo') ?? 'emitidas';
+    const rawPeriodo = searchParams.get('periodo'); // Can be '2026-04' or '202604'
+
+    // Normalize to AAAAMM (strip dash if present)
+    const periodo = rawPeriodo ? rawPeriodo.replace('-', '') : '';
+
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+
+    const backendRes = await fetch(
+      `${backendUrl}/api/sii/facturas?tipo=${tipo}&rut=${encodeURIComponent(rut)}&periodo=${periodo}`,
+      {
+        headers: { 'x-sii-session': siiSession },
+        cache: 'no-store',
+      },
+    );
+
+    if (!backendRes.ok) {
+      const err = await backendRes.json().catch(() => ({}));
       return NextResponse.json(
-        {
-          error:
-            'Invalid method. Must be "clave_unica" or "clave_tributaria"',
-        },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        { error: err?.message ?? `Backend returned ${backendRes.status}` },
+        { status: backendRes.status, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
-    // Validate RUT format
-    if (!validateRut(rut)) {
-      return NextResponse.json(
-        { error: 'Invalid RUT format' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-
-    // -----------------------------------------------------------------------
-    // Clave Unica — OAuth redirect
-    // -----------------------------------------------------------------------
-    if (method === 'clave_unica') {
-      const clientId = process.env.CLAVE_UNICA_CLIENT_ID;
-      const redirectUri = process.env.CLAVE_UNICA_REDIRECT_URI;
-
-      if (!clientId || !redirectUri) {
-        return NextResponse.json(
-          {
-            error:
-              'Clave Unica is not configured. Set CLAVE_UNICA_CLIENT_ID and CLAVE_UNICA_REDIRECT_URI.',
-            mock: true,
-          },
-          { status: 200, headers: { 'Cache-Control': 'no-store' } },
-        );
-      }
-
-      const state = crypto.randomBytes(16).toString('hex');
-
-      const authUrl =
-        `https://accounts.claveunica.gob.cl/openid/authorize` +
-        `?client_id=${encodeURIComponent(clientId)}` +
-        `&response_type=code` +
-        `&scope=${encodeURIComponent('openid run name')}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&state=${state}`;
-
-      const response = NextResponse.json(
-        { redirectUrl: authUrl, state },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
-
-      // Persist state in a secure httpOnly cookie for CSRF verification
-      response.cookies.set('sii_oauth_state', state, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 600, // 10 minutes
-      });
-
-      return response;
-    }
-
-    // -----------------------------------------------------------------------
-    // Clave Tributaria — SII session proxy
-    // -----------------------------------------------------------------------
-    if (method === 'clave_tributaria') {
-      if (!password) {
-        return NextResponse.json(
-          { error: 'Password is required for clave_tributaria' },
-          { status: 400, headers: { 'Cache-Control': 'no-store' } },
-        );
-      }
-
-      const siiProxyEnabled =
-        process.env.SII_PROXY_ENABLED === 'true';
-
-      if (siiProxyEnabled) {
-        // In production: proxy authentication to SII
-        // POST to https://zeus.sii.cl/cgi_AUT2000/CAutInicio.cgi
-        // NEVER store the password — use it once and discard
-        const formData = new URLSearchParams();
-        formData.append('rut', rut.replace(/[\.\-]/g, '').slice(0, -1));
-        formData.append('dv', rut.replace(/[\.\-\s]/g, '').toUpperCase().slice(-1));
-        formData.append('referencia', 'https://homer.sii.cl');
-        formData.append('411', password);
-
-        const siiRes = await fetch(
-          'https://zeus.sii.cl/cgi_AUT2000/CAutInicio.cgi',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData.toString(),
-            redirect: 'manual',
-          },
-        );
-
-        // Extract session cookie from SII response
-        const setCookieHeader = siiRes.headers.get('set-cookie') ?? '';
-        const tokenMatch = setCookieHeader.match(/TOKEN=([^;]+)/);
-
-        if (!tokenMatch) {
-          return NextResponse.json(
-            {
-              error: 'SII authentication failed',
-              detail: 'Could not obtain session token',
-            },
-            { status: 401, headers: { 'Cache-Control': 'no-store' } },
-          );
-        }
-
-        // Password is NOT stored — it was used for the fetch above and
-        // now goes out of scope.
-
-        const sessionToken = tokenMatch[1];
-        const response = NextResponse.json(
-          { authenticated: true, rut, mock: false },
-          { headers: { 'Cache-Control': 'no-store' } },
-        );
-
-        response.cookies.set('sii_session', sessionToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 1800, // 30 minutes
-        });
-
-        return response;
-      }
-
-      // SII proxy not enabled — mock session
-      // Password is NOT stored.
-      const mockToken = crypto.randomBytes(24).toString('hex');
-      const response = NextResponse.json(
-        { authenticated: true, rut, mock: true },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
-
-      response.cookies.set('sii_session', mockToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 1800,
-      });
-
-      return response;
-    }
+    const data = await backendRes.json();
 
     return NextResponse.json(
-      { error: 'Unhandled auth method' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      { facturas: data, tipo, periodo: rawPeriodo ?? periodo, mock: false },
+      { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Internal server error', detail: message },
       { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/sii/auth
+// Authenticates with SII via NestJS backend and sets session cookies.
+// ---------------------------------------------------------------------------
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json() as { rut?: string; password?: string };
+    const { rut, password } = body;
+
+    if (!rut || !password) {
+      return NextResponse.json(
+        { error: 'RUT y contraseña son requeridos.' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+
+    // Forward the real browser IP so NestJS rate-limits per end-user,
+    // not per Next.js proxy IP (which would be shared by all users).
+    const clientIp =
+      request.headers.get('x-real-ip') ??
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+      '127.0.0.1';
+
+    const backendRes = await fetch(`${backendUrl}/api/sii/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-forwarded-for': clientIp,
+      },
+      body: JSON.stringify({ rut, password }),
+      cache: 'no-store',
+    });
+
+    if (!backendRes.ok) {
+      const err = await backendRes.json().catch(() => ({}));
+
+      // Rate limit exceeded — give a human-readable message with retry info
+      if (backendRes.status === 429) {
+        return NextResponse.json(
+          { error: 'Demasiados intentos fallidos. Espera 15 minutos e intenta de nuevo.' },
+          { status: 429, headers: { 'Cache-Control': 'no-store', 'Retry-After': '900' } },
+        );
+      }
+
+      // NestJS validation errors use 'message' field; auth errors may also use 'message'
+      const errorMsg =
+        Array.isArray(err?.message) ? err.message.join(', ') :
+        (err?.message ?? `Error de autenticación SII (${backendRes.status}).`);
+      return NextResponse.json(
+        { error: errorMsg },
+        { status: backendRes.status, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const data = await backendRes.json() as {
+      sessionToken: string;
+      expiresAt: string;
+      rutMasked: string;
+    };
+
+    const maxAge = 30 * 60; // 30 minutes — matches SII session TTL
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    const response = NextResponse.json(
+      { success: true, rutMasked: data.rutMasked, expiresAt: data.expiresAt },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+
+    response.cookies.set('sii_session', data.sessionToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    });
+
+    // Store the formatted RUT (with dots and dash) for use in subsequent API calls
+    response.cookies.set('sii_rut', rut, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge,
+      path: '/',
+    });
+
+    return response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { error: 'Internal server error', detail: message },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/sii/auth
+// Clears session cookies (logout).
+// ---------------------------------------------------------------------------
+
+export async function DELETE(_request: NextRequest) {
+  const response = NextResponse.json(
+    { success: true },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
+  response.cookies.delete('sii_session');
+  response.cookies.delete('sii_rut');
+  return response;
 }
