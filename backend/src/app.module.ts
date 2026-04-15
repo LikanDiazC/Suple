@@ -6,6 +6,7 @@ import { InfrastructureModule } from './infrastructure/InfrastructureModule';
 import { CrmModule } from './modules/crm/crm.module';
 import { SiiModule } from './modules/sii/sii.module';
 import { ScmModule } from './modules/scm/scm.module';
+import { BpmsModule } from './modules/bpms/bpms.module';
 import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
 
 /**
@@ -47,9 +48,9 @@ import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
     CrmModule,
     SiiModule,
     ScmModule,
+    BpmsModule,
     // ERPModule,
     // SCMModule,
-    // BPMSModule,
   ],
   providers: [
     // AUDIT FIX #2: Register IpThrottlerGuard globally via DI.
@@ -80,6 +81,8 @@ export class AppModule implements NestModule {
         'api/sii/(.*)',
         // SCM: dev-mode, reads x-tenant-id header directly in ScmController
         'api/scm/(.*)',
+        // BPMS: dev-mode, reads x-tenant-id header directly
+        'api/bpms/(.*)',
       )
       .forRoutes('*');
   }

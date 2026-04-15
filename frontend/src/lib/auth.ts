@@ -114,7 +114,7 @@ export const authOptions: AuthOptions = {
       session.accessToken = token.accessToken as string;
       // Expose error to client so it can redirect to /login if needed
       if (token.error) {
-        (session as Record<string, unknown>).error = token.error;
+        (session as unknown as Record<string, unknown>).error = token.error;
       }
       if (session.user) {
         session.user.name  = token.name  as string;

@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import { Result } from '../../../../shared/kernel';
 import { Transition } from '../value-objects/Transition';
 import { BusinessRuleEvaluator } from './BusinessRuleEvaluator';
@@ -7,10 +8,12 @@ import { BusinessRuleEvaluator } from './BusinessRuleEvaluator';
  * DAG Execution Engine for BPMN Workflow Processing
  * ==========================================================================
  *
- * Implements a Directed Acyclic Graph (DAG) executor for BPMN-based
- * business process definitions. The engine:
+ * Implements a graph executor for BPMN-based business process definitions.
+ * The engine:
  *
- *   1. Validates the graph structure (acyclicity, reachability).
+ *   1. Validates the graph structure (reachability, structural integrity).
+ *      Cycles ARE permitted — real BPMN processes have loop-backs
+ *      (e.g., rejected → back to review).
  *   2. Resolves the next node(s) from a given state by evaluating
  *      outgoing transitions through the BusinessRuleEvaluator.
  *   3. Supports parallel gateways (fork/join) via multi-target transitions.
@@ -22,10 +25,6 @@ import { BusinessRuleEvaluator } from './BusinessRuleEvaluator';
  *
  * The engine is stateless. Process state (current node, variables)
  * is managed by the ProcessInstance aggregate and persisted externally.
- *
- * Topological ordering via Kahn's algorithm ensures:
- *   - No circular dependencies exist in the process definition.
- *   - Execution order respects dependency constraints.
  * ==========================================================================
  */
 
@@ -61,6 +60,7 @@ export interface ExecutionStep {
   }>;
 }
 
+@Injectable()
 export class DAGExecutionEngine {
   private readonly ruleEvaluator = new BusinessRuleEvaluator();
 
@@ -69,14 +69,20 @@ export class DAGExecutionEngine {
   // -------------------------------------------------------------------------
 
   /**
-   * Validates the process graph using Kahn's algorithm for topological sort.
-   * Ensures:
-   *   1. The graph is a valid DAG (no cycles).
-   *   2. Exactly one START_EVENT exists.
-   *   3. At least one END_EVENT exists.
-   *   4. All nodes are reachable from the start node.
+   * Validates the process graph structure.
+   * Cycles are allowed (BPMN loop-backs are valid).
+   *
+   * Checks:
+   *   1. Exactly one START_EVENT exists.
+   *   2. At least one END_EVENT exists.
+   *   3. All transition fromNodeId / toNodeId values reference existing nodes.
+   *   4. All nodes are reachable from the START_EVENT via BFS
+   *      (prevents unreachable / orphaned nodes that would cause deadlocks).
+   *
+   * Returns the set of reachable node IDs on success.
    */
   validateGraph(graph: ProcessGraph): Result<string[]> {
+    // 1. Exactly one START_EVENT
     const startNodes = graph.nodes.filter((n) => n.type === NodeType.START_EVENT);
     if (startNodes.length !== 1) {
       return Result.fail(
@@ -84,64 +90,63 @@ export class DAGExecutionEngine {
       );
     }
 
+    // 2. At least one END_EVENT
     const endNodes = graph.nodes.filter((n) => n.type === NodeType.END_EVENT);
     if (endNodes.length === 0) {
       return Result.fail('Process must have at least one END_EVENT');
     }
 
-    // Kahn's algorithm for topological sort and cycle detection.
-    const adjacency = new Map<string, string[]>();
-    const inDegree = new Map<string, number>();
-
-    for (const node of graph.nodes) {
-      adjacency.set(node.id, []);
-      inDegree.set(node.id, 0);
-    }
+    // 3. All transition source/target node IDs must exist in the nodes array
+    const nodeIdSet = new Set(graph.nodes.map((n) => n.id));
 
     for (const transition of graph.transitions) {
-      const targets = adjacency.get(transition.fromNodeId);
-      if (!targets) {
+      if (!nodeIdSet.has(transition.fromNodeId)) {
         return Result.fail(
           `Transition references unknown source node: ${transition.fromNodeId}`,
         );
       }
-      if (!inDegree.has(transition.toNodeId)) {
+      if (!nodeIdSet.has(transition.toNodeId)) {
         return Result.fail(
           `Transition references unknown target node: ${transition.toNodeId}`,
         );
       }
-      targets.push(transition.toNodeId);
-      inDegree.set(transition.toNodeId, (inDegree.get(transition.toNodeId) ?? 0) + 1);
     }
 
-    // BFS from nodes with in-degree 0.
-    const queue: string[] = [];
-    for (const [nodeId, degree] of inDegree) {
-      if (degree === 0) queue.push(nodeId);
+    // 4. BFS from START node — all nodes must be reachable
+    const adjacency = new Map<string, string[]>();
+    for (const node of graph.nodes) {
+      adjacency.set(node.id, []);
+    }
+    for (const transition of graph.transitions) {
+      adjacency.get(transition.fromNodeId)!.push(transition.toNodeId);
     }
 
-    const sorted: string[] = [];
+    const startNodeId = startNodes[0].id;
+    const visited = new Set<string>();
+    const queue: string[] = [startNodeId];
+
     while (queue.length > 0) {
       const current = queue.shift()!;
-      sorted.push(current);
-
+      if (visited.has(current)) continue;
+      visited.add(current);
       for (const neighbor of adjacency.get(current) ?? []) {
-        const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
-        inDegree.set(neighbor, newDegree);
-        if (newDegree === 0) queue.push(neighbor);
+        if (!visited.has(neighbor)) {
+          queue.push(neighbor);
+        }
       }
     }
 
-    if (sorted.length !== graph.nodes.length) {
-      const cycleNodes = graph.nodes
-        .filter((n) => !sorted.includes(n.id))
-        .map((n) => n.name);
+    const unreachable = graph.nodes
+      .filter((n) => !visited.has(n.id))
+      .map((n) => n.name);
+
+    if (unreachable.length > 0) {
       return Result.fail(
-        `Cycle detected in process graph. Nodes involved: [${cycleNodes.join(', ')}]`,
+        `Unreachable nodes detected (deadlock prevention). Nodes not reachable from START: [${unreachable.join(', ')}]`,
       );
     }
 
-    return Result.ok(sorted);
+    return Result.ok([...visited]);
   }
 
   // -------------------------------------------------------------------------
@@ -234,7 +239,7 @@ export class DAGExecutionEngine {
         break;
       }
 
-      default:
+      default: {
         // Standard nodes: first matching transition.
         const firstMatch = evaluated.find((e) => e.conditionsMet);
         if (!firstMatch) {
@@ -244,6 +249,7 @@ export class DAGExecutionEngine {
         }
         targetNodeIds = [firstMatch.transitionTo];
         break;
+      }
     }
 
     return Result.ok({
@@ -264,6 +270,9 @@ export class DAGExecutionEngine {
    * Executes the process graph from the START_EVENT, stepping through
    * nodes until reaching an END_EVENT or encountering a USER_TASK
    * that requires human intervention.
+   *
+   * Uses a maxSteps counter (instead of a visited-set) to prevent infinite
+   * loops, since cycles are valid in BPMN process graphs.
    *
    * Returns the execution trace (sequence of steps taken) and the
    * node where execution paused or completed.
@@ -288,9 +297,11 @@ export class DAGExecutionEngine {
 
     const trace: ExecutionStep[] = [];
     let currentNodeId = startNode.id;
-    const visited = new Set<string>();
+    const maxSteps = 100;
+    let steps = 0;
 
-    while (true) {
+    while (steps < maxSteps) {
+      steps++;
       const currentNode = graph.nodes.find((n) => n.id === currentNodeId)!;
 
       // Terminal condition: END_EVENT reached.
@@ -299,18 +310,9 @@ export class DAGExecutionEngine {
       }
 
       // Pause condition: USER_TASK requires human input.
-      if (
-        currentNode.type === NodeType.USER_TASK &&
-        visited.has(currentNodeId)
-      ) {
+      if (currentNode.type === NodeType.USER_TASK) {
         return Result.ok({ trace, stoppedAt: currentNodeId, completed: false });
       }
-
-      // Safety: prevent infinite loops in malformed graphs.
-      if (visited.has(currentNodeId) && currentNode.type !== NodeType.USER_TASK) {
-        return Result.fail(`Execution loop detected at node: ${currentNode.name}`);
-      }
-      visited.add(currentNodeId);
 
       // Resolve next step.
       const stepResult = this.resolveNextNodes(graph, currentNodeId, processVariables);
@@ -330,5 +332,9 @@ export class DAGExecutionEngine {
       // Full parallel execution requires a process instance state machine.
       currentNodeId = step.toNodeIds[0];
     }
+
+    return Result.fail(
+      `Execution exceeded maximum steps (${maxSteps}). Possible infinite loop in graph.`,
+    );
   }
 }

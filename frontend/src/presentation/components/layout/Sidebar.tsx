@@ -48,9 +48,40 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
           { label: 'Analytics',  href: '/dashboard/marketing/analytics' },
         ],
       },
-      { label: 'ERP',  href: '/dashboard/erp',  icon: <LedgerIcon /> },
-      { label: 'SCM',  href: '/dashboard/scm',  icon: <TruckIcon /> },
-      { label: 'BPMS', href: '/dashboard/bpms', icon: <WorkflowIcon /> },
+      {
+        label: 'ERP',
+        href: '/dashboard/erp',
+        icon: <LedgerIcon />,
+        children: [
+          { label: 'Resumen',        href: '/dashboard/erp' },
+          { label: 'Contabilidad',   href: '/dashboard/erp/accounting' },
+          { label: 'Libro Mayor',    href: '/dashboard/erp/ledger' },
+          { label: 'Reportes',       href: '/dashboard/erp/reports' },
+        ],
+      },
+      {
+        label: 'SCM',
+        href: '/dashboard/scm',
+        icon: <TruckIcon />,
+        children: [
+          { label: 'Resumen',          href: '/dashboard/scm' },
+          { label: 'Inventario',       href: '/dashboard/scm/inventory' },
+          { label: 'Órdenes de Corte', href: '/dashboard/scm/work-orders' },
+          { label: 'Nueva Orden',      href: '/dashboard/scm/work-orders/new' },
+        ],
+      },
+      {
+        label: 'BPMS',
+        href: '/dashboard/bpms',
+        icon: <WorkflowIcon />,
+        children: [
+          { label: 'Resumen',    href: '/dashboard/bpms' },
+          { label: 'Procesos',   href: '/dashboard/bpms/processes' },
+          { label: 'Mis Tareas', href: '/dashboard/bpms/tasks' },
+          { label: 'Monitor',    href: '/dashboard/bpms/monitor' },
+          { label: 'Diseñador',  href: '/dashboard/bpms/designer' },
+        ],
+      },
     ],
   },
   {
@@ -69,7 +100,7 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['CRM', 'Marketing', 'Finance & Tax']));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['CRM', 'Marketing', 'ERP', 'SCM', 'BPMS', 'Finance & Tax']));
   const pathname = usePathname();
 
   const toggleSection = (label: string) => {

@@ -262,14 +262,8 @@ export class ScmController {
   ) {
     const tenantId = resolveTenantId(req);
 
-    const result = await this.optimizeUseCase.execute({
-      tenantId,
-      workOrderId: id,
-    });
-
-    if (result.isFail()) {
-      throw new UnprocessableEntityException(result.error);
-    }
+    // execute() throws NestJS exceptions on failure (NotFoundException / UnprocessableEntityException)
+    await this.optimizeUseCase.execute({ tenantId, workOrderId: id });
 
     // Re-fetch to return updated state
     const wo = await this.workOrderRepo.findById(tenantId, id);
