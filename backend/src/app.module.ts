@@ -2,10 +2,10 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TenantMiddleware } from './modules/iam/infrastructure/middleware/TenantMiddleware';
-import { EventBus } from './infrastructure/messaging/events/EventBus';
-import { KafkaEventProducer } from './infrastructure/messaging/kafka/KafkaProducer';
+import { InfrastructureModule } from './infrastructure/InfrastructureModule';
 import { CrmModule } from './modules/crm/crm.module';
 import { SiiModule } from './modules/sii/sii.module';
+import { ScmModule } from './modules/scm/scm.module';
 import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
 
 /**
@@ -38,17 +38,20 @@ import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
       },
     ]),
 
+    // -----------------------------------------------------------------------
+    // Shared infrastructure (EventBus + KafkaEventProducer) — @Global()
+    // -----------------------------------------------------------------------
+    InfrastructureModule,
+
     // Bounded context modules (DDD)
     CrmModule,
     SiiModule,
+    ScmModule,
     // ERPModule,
     // SCMModule,
     // BPMSModule,
   ],
   providers: [
-    EventBus,
-    KafkaEventProducer,
-
     // AUDIT FIX #2: Register IpThrottlerGuard globally via DI.
     // Uses X-Forwarded-For from the Next.js proxy so each end-user
     // gets their own independent rate-limit bucket (not shared by
@@ -58,7 +61,8 @@ import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
       useClass: IpThrottlerGuard,
     },
   ],
-  exports: [EventBus],
+  // EventBus is exported by InfrastructureModule (@Global) — no re-export needed here.
+  exports: [],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
@@ -74,6 +78,8 @@ export class AppModule implements NestModule {
         'api/crm/(.*)',
         // SII auth is its own authentication domain (SII credentials, not app JWT)
         'api/sii/(.*)',
+        // SCM: dev-mode, reads x-tenant-id header directly in ScmController
+        'api/scm/(.*)',
       )
       .forRoutes('*');
   }
