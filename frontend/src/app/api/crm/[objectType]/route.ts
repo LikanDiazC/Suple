@@ -74,9 +74,15 @@ export async function GET(
   // ── Try Google People API when user is authenticated ──────────────────────
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
 
-  if (token?.accessToken && (objectType === 'contacts' || objectType === 'companies')) {
+  // Skip People API if token is missing or refresh failed (expired token)
+  const canUsePeopleApi =
+    token?.accessToken &&
+    token.error !== 'RefreshAccessTokenError' &&
+    (objectType === 'contacts' || objectType === 'companies');
+
+  if (canUsePeopleApi) {
     try {
-      const oauth2Client = getOAuth2Client(token.accessToken as string);
+      const oauth2Client = getOAuth2Client(token!.accessToken as string);
       const people = google.people({ version: 'v1', auth: oauth2Client });
 
       const res = await people.people.connections.list({
@@ -179,12 +185,21 @@ export async function GET(
         }));
       }
     } catch (err) {
-      console.error(`[CRM] Google People API error for ${objectType}:`, err);
-      // Fall back to demo data on any error
+      const gaxios = err as { response?: { status: number } };
+      console.error(
+        `[CRM] Google People API error for ${objectType} (HTTP ${gaxios?.response?.status ?? 'unknown'}):`,
+        (err as Error).message,
+      );
+      // Fall back to demo data on any error (expired token, API not enabled, etc.)
+      records = objectType === 'contacts' ? CONTACTS_FALLBACK : COMPANIES_FALLBACK;
+    }
+
+    // If People API returned 0 connections, fall back to demo data
+    if (records.length === 0 && (objectType === 'contacts' || objectType === 'companies')) {
       records = objectType === 'contacts' ? CONTACTS_FALLBACK : COMPANIES_FALLBACK;
     }
   } else {
-    // No Google session — use demo data
+    // No Google session or token expired — use demo data
     records =
       objectType === 'contacts'
         ? CONTACTS_FALLBACK

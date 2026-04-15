@@ -377,19 +377,27 @@ export default function InboxPage() {
   // When real Gmail data is available, convert and use it
   useEffect(() => {
     if (!isLoadingInbox && realInbox.length > 0) {
-      const converted: MockEmail[] = realInbox.map((msg: GmailMessage, idx: number) => ({
-        id: msg.id || `real-${idx}`,
-        from: { name: msg.from || msg.fromEmail || 'Desconocido', email: msg.fromEmail || '' },
-        subject: msg.subject,
-        preview: msg.snippet,
-        body: msg.snippet,
-        date: new Date(msg.date),
-        read: !msg.isUnread,
-        starred: msg.isStarred,
-        folder: 'inbox' as const,
-        companyDomain: msg.fromEmail?.split('@')[1] || '',
-        companyName: msg.fromEmail?.split('@')[1]?.split('.')[0] || '',
-      }));
+      const safeDate = (raw: string): Date => {
+        if (!raw) return new Date();
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? new Date() : d;
+      };
+
+      const converted: MockEmail[] = realInbox
+        .filter((msg: GmailMessage) => msg.id) // skip messages with null id
+        .map((msg: GmailMessage, idx: number) => ({
+          id: msg.id || `real-${idx}`,
+          from: { name: msg.from || msg.fromEmail || 'Desconocido', email: msg.fromEmail || '' },
+          subject: msg.subject || '(Sin asunto)',
+          preview: msg.snippet || '',
+          body: msg.snippet || '',
+          date: safeDate(msg.date),
+          read: !msg.isUnread,
+          starred: msg.isStarred,
+          folder: 'inbox' as const,
+          companyDomain: msg.fromEmail?.split('@')[1] || '',
+          companyName: msg.fromEmail?.split('@')[1]?.split('.')[0] || '',
+        }));
       setEmails(converted);
       setUsingRealData(true);
       if (converted.length > 0) setSelectedId(converted[0].id);

@@ -93,7 +93,11 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
       }
       if (!res.ok) throw new Error(`Failed to fetch starred: ${res.status}`);
       const data = await res.json();
-      setStarred(Array.isArray(data) ? data : data.messages ?? []);
+      // Handle: array | { messages: [] } | { emails: [] }
+      setStarred(
+        Array.isArray(data) ? data
+          : data.messages ?? data.emails ?? [],
+      );
     } catch (err) {
       console.error('[EmailContext] fetchStarred error:', err);
       setStarred([]);

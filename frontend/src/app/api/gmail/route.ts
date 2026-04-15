@@ -69,8 +69,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(messages, {
       headers: { 'Cache-Control': 'no-store' },
     });
-  } catch (error) {
-    console.error('[GET /api/gmail]', error);
+  } catch (error: unknown) {
+    const gaxios = error as { response?: { status: number; data?: unknown }; message?: string };
+    console.error('[GET /api/gmail]', gaxios?.response?.data ?? gaxios?.message ?? error);
+
+    // Google returned 401 (expired / revoked token) → signal client to re-auth
+    if (gaxios?.response?.status === 401) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
     return NextResponse.json(
       { error: 'Failed to fetch inbox messages' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } },
