@@ -10,10 +10,10 @@ import { Factura, TipoDocumento, EstadoSII, calcularIva, calcularTotal } from '.
  * Mock implementation of ISiiRepository for development and testing.
  *
  * In production, this would be replaced by SiiApiProxyRepository, which:
- *  1. Connects to the SII SOAP/REST web services
- *  2. Uses a server-side session (never exposed to clients)
- *  3. Implements exponential backoff and circuit breaking
- *  4. Logs all access to the audit trail
+ * 1. Connects to the SII SOAP/REST web services
+ * 2. Uses a server-side session (never exposed to clients)
+ * 3. Implements exponential backoff and circuit breaking
+ * 4. Logs all access to the audit trail
  *
  * SECURITY: Even in dev mode, password is accepted but never stored or logged.
  *
@@ -24,7 +24,7 @@ export class InMemorySiiRepository implements ISiiRepository {
   // Simulates active session tokens (in-memory, lost on restart)
   private readonly activeSessions = new Map<string, { expiresAt: number }>();
 
-  async authenticateWithClaveTributaria(rutBody: string, _password: string): Promise<string> {
+  async authenticateWithClaveTributaria(rut: string, _password: string): Promise<string> {
     // Simulate network latency
     await this.delay(600);
 
@@ -33,7 +33,7 @@ export class InMemorySiiRepository implements ISiiRepository {
     // the credentials and receive a session cookie.
 
     // Generate a mock encrypted token (in prod: AES-256-GCM encrypted SII cookie)
-    const token = `sii_sess_${rutBody}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const token = `sii_sess_${rut}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
     // Store with 30-minute TTL
     this.activeSessions.set(token, { expiresAt: Date.now() + 30 * 60 * 1000 });

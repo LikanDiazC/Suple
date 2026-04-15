@@ -7,17 +7,6 @@ import { AuthWithSiiDto, AuthWithSiiResponseDto } from '../dtos/SiiDto';
  * ==========================================================================
  * AuthWithSII — Use Case
  * ==========================================================================
- *
- * Authenticates a taxpayer with the SII using Clave Tributaria.
- *
- * SECURITY:
- *  1. Validates RUT with Mod-11 before attempting auth (saves SII API calls).
- *  2. Credentials (password) are passed directly to the SII proxy client
- *     and NEVER stored in memory beyond this function scope.
- *  3. Returns an encrypted, short-lived session token.
- *  4. Rate limiting is enforced at the controller layer (not here).
- *
- * ==========================================================================
  */
 @Injectable()
 export class AuthWithSIIUseCase {
@@ -38,8 +27,9 @@ export class AuthWithSIIUseCase {
     }
 
     // 2. Attempt SII authentication via proxy (credentials never stored)
+    // CORRECCIÓN: Enviamos el RUT completo para no perder el dígito verificador
     const encryptedToken = await this.siiRepo.authenticateWithClaveTributaria(
-      rut.body,
+      rut.toFullString(), 
       dto.password,
     );
 

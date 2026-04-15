@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../presentation/animations/variants';
 
@@ -218,34 +218,42 @@ function FacturaTable({ facturas, tipo }: { facturas: FacturaMock[]; tipo: 'emit
           </tr>
         </thead>
         <tbody>
-          {facturas.map((f, i) => {
-            const st = ESTADO_STYLE[f.estado];
-            return (
-              <motion.tr
-                key={f.folio}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.03 }}
-                className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
-              >
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">#{f.folio}</td>
-                <td className="px-4 py-3 text-neutral-700">{f.tipo}</td>
-                <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDate(f.fecha)}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-neutral-800">{f.razonSocial}</p>
-                  <p className="text-[11px] text-neutral-400">{f.rut}</p>
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-neutral-700 whitespace-nowrap">${fmtCLP(f.montoNeto)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
-                <td className={`px-4 py-3 text-right font-mono whitespace-nowrap ${f.iva > 0 ? 'text-neutral-700' : 'text-neutral-300'}`}>${fmtCLP(f.iva)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
-                <td className="px-4 py-3 text-right font-mono font-semibold text-neutral-900 whitespace-nowrap">${fmtCLP(f.total)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.class}`}>
-                    {st.label}
-                  </span>
-                </td>
-              </motion.tr>
-            );
-          })}
+          {facturas.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="px-4 py-8 text-center text-neutral-400">
+                No hay documentos registrados en este período.
+              </td>
+            </tr>
+          ) : (
+            facturas.map((f, i) => {
+              const st = ESTADO_STYLE[f.estado];
+              return (
+                <motion.tr
+                  key={f.folio}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
+                >
+                  <td className="px-4 py-3 font-mono text-xs text-neutral-500">#{f.folio}</td>
+                  <td className="px-4 py-3 text-neutral-700">{f.tipo}</td>
+                  <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDate(f.fecha)}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-neutral-800">{f.razonSocial}</p>
+                    <p className="text-[11px] text-neutral-400">{f.rut}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-neutral-700 whitespace-nowrap">${fmtCLP(f.montoNeto)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
+                  <td className={`px-4 py-3 text-right font-mono whitespace-nowrap ${f.iva > 0 ? 'text-neutral-700' : 'text-neutral-300'}`}>${fmtCLP(f.iva)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-neutral-900 whitespace-nowrap">${fmtCLP(f.total)} <span className="text-[0.65em] font-normal text-neutral-400">CLP</span></td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.class}`}>
+                      {st.label}
+                    </span>
+                  </td>
+                </motion.tr>
+              );
+            })
+          )}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-neutral-200 bg-neutral-50 font-semibold">
@@ -391,7 +399,25 @@ export default function SiiPage() {
   const [authError, setAuthError]   = useState('');
   const [activeTab, setActiveTab]   = useState<FacturaTab>('emitidas');
   const [sessionRut, setSessionRut] = useState('');
-  const [periodo, setPeriodo]       = useState('202604');
+
+  // Dynamically calculate the last 6 months based on the current date
+  const last6Months = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    // We go backwards 6 months. i = 5 to 0.
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      months.push(`${year}${month}`);
+    }
+    return months;
+  }, []);
+
+  const [periodo, setPeriodo] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Real facturas fetched from the backend (fall back to mock data on error)
   const [emitidas, setEmitidas]           = useState<FacturaMock[]>([]);
@@ -497,13 +523,14 @@ export default function SiiPage() {
           (f: FacturaApiDto) => mapApiToMock(f, 'recibidas'),
         );
 
-        // Use real data if available, otherwise fall back to mock for display
-        setEmitidas(mappedE.length > 0 ? mappedE : MOCK_EMITIDAS);
-        setRecibidas(mappedR.length > 0 ? mappedR : MOCK_RECIBIDAS);
+        // Usar los datos reales exactamente como vienen desde el backend (incluso si son 0)
+        setEmitidas(mappedE);
+        setRecibidas(mappedR);
       } catch (err) {
         if (cancelled) return;
         console.error('[SII] Error fetching facturas:', err);
         setFetchError('No se pudo conectar al servidor. Mostrando datos de ejemplo.');
+        // Solo mostrar los de prueba si hay un error de red real
         setEmitidas(MOCK_EMITIDAS);
         setRecibidas(MOCK_RECIBIDAS);
       } finally {
@@ -770,7 +797,7 @@ export default function SiiPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-neutral-900">Período de consulta</h2>
               <div className="flex items-center gap-2">
-                {['202402','202501','202502','202503','202604'].map(p => (
+                {last6Months.map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriodo(p)}
@@ -778,9 +805,24 @@ export default function SiiPage() {
                       periodo === p ? 'bg-blue-600 text-white' : 'bg-white border border-neutral-200 text-neutral-500 hover:bg-neutral-50'
                     }`}
                   >
-                    {p.slice(0, 4)}/{p.slice(4)}
+                    {p.slice(4)}/{p.slice(2, 4)}
                   </button>
                 ))}
+                
+                {/* Custom Month Picker */}
+                <input
+                  type="month"
+                  value={`${periodo.slice(0, 4)}-${periodo.slice(4)}`}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setPeriodo(e.target.value.replace('-', ''));
+                    }
+                  }}
+                  className={`rounded-lg px-2 py-1 text-xs font-semibold transition-colors outline-none cursor-pointer ${
+                    !last6Months.includes(periodo) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border border-neutral-200 text-neutral-500 hover:bg-neutral-50'
+                  }`}
+                  title="Seleccionar otro período"
+                />
               </div>
             </div>
 

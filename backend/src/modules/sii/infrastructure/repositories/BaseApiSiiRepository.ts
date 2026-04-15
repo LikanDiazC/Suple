@@ -10,76 +10,35 @@ import {
 
 /**
  * ==========================================================================
- * BaseApiSiiRepository — Production Adapter (BaseAPI.cl / SimpleAPI)
- * ==========================================================================
- *
- * Connects to BaseAPI.cl, a Chilean API proxy that simplifies SII
- * interactions. BaseAPI handles the complex SII SOAP authentication
- * and provides a clean REST interface for RCV (Registro de Compras y
- * Ventas) data retrieval.
- *
- * Endpoints used:
- *   POST /sii/auth                  → Authenticate with Clave Tributaria
- *   GET  /sii/rcv/emitidos          → Facturas emitidas (RCV)
- *   GET  /sii/rcv/recibidos         → Facturas recibidas (RCV)
- *   GET  /sii/session/validate      → Check session validity
- *
- * Configuration (env vars):
- *   BASEAPI_URL   — Base URL (default: https://api.baseapi.cl/v1)
- *   BASEAPI_TOKEN — API key for BaseAPI.cl authentication
- *
- * SECURITY:
- *   - Clave Tributaria is proxied through BaseAPI.cl, never stored locally
- *   - SII session tokens are ephemeral (30 min TTL managed by SII)
- *   - BASEAPI_TOKEN authenticates our app to BaseAPI.cl (separate from SII)
- *   - All requests use HTTPS
- *   - Credentials are NEVER logged (even at DEBUG level)
- *
- * Error handling:
- *   - Network failures → retried once with 2s delay
- *   - SII downtime (HTTP 503) → thrown as-is for controller to handle
- *   - Invalid credentials → mapped to domain error
- *   - Rate limiting (429) → thrown with retry-after hint
- *
+ * BaseApiSiiRepository — Production Adapter (BaseAPI.cl)
  * ==========================================================================
  */
 
-/** Raw document shape returned by BaseAPI.cl RCV endpoint */
-interface BaseApiRcvDocument {
-  tipo_documento:       number;       // SII code (33, 34, 39, etc.)
-  folio:                number;
-  fecha_emision:        string;       // YYYY-MM-DD
-  rut_emisor:           string;       // XX.XXX.XXX-X
-  razon_social_emisor:  string;
-  rut_receptor:         string;
-  razon_social_receptor: string;
-  monto_exento:         number;
-  monto_neto:           number;
-  monto_iva:            number;
-  monto_total:          number;
-  estado:               string;       // 'ACEPTADO', 'RECHAZADO', etc.
-  glosa?:               string;
+interface BaseApiDocument {
+  "Nro"?: string;
+  "Tipo Doc"?: string | number;
+  "RUT Proveedor"?: string;
+  "RUT Cliente"?: string;
+  "RUT Receptor"?: string;
+  "Razon Social"?: string;
+  "Folio"?: string | number;
+  "Fecha Docto"?: string;
+  "Monto Exento"?: string | number;
+  "Monto Neto"?: string | number;
+  "Monto IVA"?: string | number;
+  "Monto total"?: string | number;
+  "Monto Total"?: string | number;
+  [key: string]: any;
 }
 
-/** Auth response from BaseAPI.cl */
-interface BaseApiAuthResponse {
-  token:      string;           // SII session token (proxied)
-  expires_at: string;           // ISO 8601
-  rut:        string;           // masked RUT
-}
-
-/** Session validation response */
-interface BaseApiSessionResponse {
-  valid:      boolean;
-  expires_at?: string;
-}
-
-/** RCV list response */
 interface BaseApiRcvResponse {
-  data:  BaseApiRcvDocument[];
-  total: number;
-  page:  number;
-  pages: number;
+  success: boolean;
+  message?: string;
+  data: {
+    totalRegistros: number;
+    datos: BaseApiDocument[];
+    resumenPorTipo?: any[];
+  } | any[]; 
 }
 
 @Injectable()
@@ -89,13 +48,20 @@ export class BaseApiSiiRepository implements ISiiRepository {
   private readonly apiToken: string;
 
   constructor() {
-    this.baseUrl = process.env.BASEAPI_URL || 'https://api.baseapi.cl/v1';
+    let envUrl = process.env.BASEAPI_URL || 'https://api.baseapi.cl';
+    
+    if (envUrl.startsWith('http://') && !envUrl.includes('localhost')) {
+      envUrl = envUrl.replace('http://', 'https://');
+    }
+
+    envUrl = envUrl.replace(/\/+$/, '');
+    envUrl = envUrl.replace(/\/api\/v1$/, '').replace(/\/v1$/, '').replace(/\/api$/, '');
+
+    this.baseUrl = envUrl;
     this.apiToken = process.env.BASEAPI_TOKEN || '';
 
     if (!this.apiToken) {
-      this.logger.warn(
-        'BASEAPI_TOKEN no está configurado. Las llamadas a BaseAPI.cl fallarán.',
-      );
+      this.logger.warn('BASEAPI_TOKEN no está configurado. Llenar el header x-api-key fallará.');
     }
   }
 
@@ -107,21 +73,27 @@ export class BaseApiSiiRepository implements ISiiRepository {
     rutBody: string,
     password: string,
   ): Promise<string> {
-    // SECURITY: password is proxied to BaseAPI.cl and NEVER logged
-    const response = await this.request<BaseApiAuthResponse>(
-      'POST',
-      '/sii/auth',
-      {
-        rut: rutBody,
-        password, // BaseAPI.cl forwards this to SII and discards it
-      },
-    );
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const formattedRut = this.formatRutForApi(rutBody);
 
-    this.logger.log(
-      `SII auth successful for RUT ${this.maskRut(rutBody)}, expires: ${response.expires_at}`,
-    );
+    try {
+      this.logger.debug(`Validando credenciales para RUT ${formattedRut} en periodo ${currentPeriod}`);
+      
+      await this.request<BaseApiRcvResponse>(
+        'POST',
+        `/api/v1/sii/rcv/${currentPeriod}/compra`,
+        { rut: formattedRut, password }
+      );
 
-    return response.token;
+      const token = Buffer.from(password).toString('base64');
+      this.logger.log(`SII auth validada para RUT ${this.maskRut(formattedRut)}`);
+      
+      return token;
+    } catch (error) {
+      this.logger.error('Error autenticando con SII: Credenciales inválidas o servicio caído');
+      throw error;
+    }
   }
 
   async getFacturasEmitidas(
@@ -142,126 +114,132 @@ export class BaseApiSiiRepository implements ISiiRepository {
 
   async isSessionValid(encryptedToken: string): Promise<boolean> {
     try {
-      const response = await this.request<BaseApiSessionResponse>(
-        'GET',
-        '/sii/session/validate',
-        undefined,
-        { 'X-SII-Token': encryptedToken },
-      );
-      return response.valid;
+      const password = Buffer.from(encryptedToken, 'base64').toString('utf-8');
+      return password.length > 0;
     } catch {
-      // If validation endpoint fails, assume session is invalid
       return false;
     }
   }
 
   // =========================================================================
-  // RCV data fetching (paginated)
+  // RCV data fetching
   // =========================================================================
 
-  /**
-   * Fetches all pages of RCV data for the given period.
-   * BaseAPI.cl paginates results (typically 50-100 per page).
-   */
   private async fetchRcv(
     siiToken: string,
     rut: string,
     periodo: string,
     tipo: 'emitidos' | 'recibidos',
   ): Promise<Factura[]> {
-    const year  = periodo.slice(0, 4);
-    const month = periodo.slice(4, 6);
-    const allDocuments: BaseApiRcvDocument[] = [];
-    let page = 1;
-    let totalPages = 1;
+    
+    let formattedPeriodo = periodo;
+    if (periodo.length === 6 && !periodo.includes('-')) {
+      formattedPeriodo = `${periodo.slice(0, 4)}-${periodo.slice(4, 6)}`;
+    }
 
-    do {
-      const response = await this.request<BaseApiRcvResponse>(
-        'GET',
-        `/sii/rcv/${tipo}`,
-        undefined,
-        { 'X-SII-Token': siiToken },
-        {
-          rut,
-          anio: year,
-          mes: month,
-          page: String(page),
-        },
-      );
+    const endpointTipo = tipo === 'emitidos' ? 'venta' : 'compra';
+    const password = Buffer.from(siiToken, 'base64').toString('utf-8');
+    const formattedRut = this.formatRutForApi(rut);
 
-      allDocuments.push(...response.data);
-      totalPages = response.pages;
-      page++;
-    } while (page <= totalPages);
-
-    this.logger.log(
-      `RCV ${tipo}: ${allDocuments.length} documentos para ${this.maskRut(rut)} periodo ${periodo}`,
+    const response = await this.request<BaseApiRcvResponse>(
+      'POST',
+      `/api/v1/sii/rcv/${formattedPeriodo}/${endpointTipo}`,
+      { rut: formattedRut, password }
     );
 
-    return allDocuments.map(doc => this.mapToFactura(doc));
+    if (!response.data || Array.isArray(response.data) || !response.data.datos) {
+      this.logger.log(`RCV ${tipo}: 0 documentos para ${this.maskRut(formattedRut)} periodo ${formattedPeriodo}`);
+      return [];
+    }
+
+    const documentos = response.data.datos;
+    this.logger.log(`RCV ${tipo}: ${documentos.length} documentos para ${this.maskRut(formattedRut)} periodo ${formattedPeriodo}`);
+
+    return documentos.map(doc => this.mapToFactura(doc, formattedRut, tipo));
   }
 
   // =========================================================================
-  // Mapping: BaseAPI.cl response → Domain Entity
+  // Mapping
   // =========================================================================
 
-  private mapToFactura(doc: BaseApiRcvDocument): Factura {
-    const tipoDocumento = this.mapTipoDocumento(doc.tipo_documento);
-    const montoNeto = doc.monto_neto || 0;
+  private mapToFactura(doc: BaseApiDocument, miRut: string, tipo: 'emitidos' | 'recibidos'): Factura {
+    const tipoDocumento = this.mapTipoDocumento(Number(doc["Tipo Doc"] || 33));
+    const montoNeto = Number(doc["Monto Neto"]) || 0;
 
-    // Use API-provided IVA if available, otherwise calculate
-    // (Some document types like FACTURA_NO_AFECTA have IVA = 0)
-    let iva = doc.monto_iva ?? 0;
+    let iva = Number(doc["Monto IVA"]) || 0;
     if (tipoDocumento === 'FACTURA_AFECTA' && iva === 0 && montoNeto > 0) {
-      // Fallback: calculate IVA if API didn't provide it
       iva = calcularIva(montoNeto);
     }
 
-    const montoTotal = doc.monto_total || (montoNeto + iva);
+    const montoTotal = Number(doc["Monto total"] || doc["Monto Total"]) || (montoNeto + iva);
+
+    let rutEmisor = miRut;
+    let rutReceptor = doc["RUT Proveedor"] || doc["RUT Cliente"] || doc["RUT Receptor"] || '';
+    let razonSocialEmisor = '';
+    let razonSocialReceptor = doc["Razon Social"] || '';
+
+    if (tipo === 'recibidos') {
+      rutEmisor = doc["RUT Proveedor"] || '';
+      rutReceptor = miRut;
+      razonSocialEmisor = doc["Razon Social"] || '';
+      razonSocialReceptor = '';
+    }
 
     return {
-      folio:               doc.folio,
+      folio:               Number(doc["Folio"] || 0),
       tipoDocumento,
-      fechaEmision:        new Date(doc.fecha_emision),
-      rutEmisor:           doc.rut_emisor,
-      razonSocialEmisor:   doc.razon_social_emisor,
-      rutReceptor:         doc.rut_receptor,
-      razonSocialReceptor: doc.razon_social_receptor,
+      fechaEmision:        this.parseDate(doc["Fecha Docto"]),
+      rutEmisor,
+      razonSocialEmisor,
+      rutReceptor,
+      razonSocialReceptor,
       montoNeto,
       iva,
       montoTotal,
-      estado:              this.mapEstado(doc.estado),
-      glosa:               doc.glosa,
+      estado:              'ACEPTADO',
+      glosa:               doc["Tipo Compra"] || '',
     };
   }
 
   private mapTipoDocumento(code: number): TipoDocumento {
     const mapped = SII_CODE_TO_TIPO[code];
     if (mapped) return mapped;
-
-    // Unknown code: log warning and default to FACTURA_AFECTA
-    this.logger.warn(
-      `Código de documento SII desconocido: ${code}. Usando FACTURA_AFECTA como fallback.`,
-    );
     return 'FACTURA_AFECTA';
   }
 
-  private mapEstado(estado: string): EstadoSII {
-    const normalized = estado?.toUpperCase().trim();
-    const mapping: Record<string, EstadoSII> = {
-      'ACEPTADO':              'ACEPTADO',
-      'ACEPTADO_CON_REPAROS':  'ACEPTADO_CON_REPAROS',
-      'ACEPTADO CON REPAROS':  'ACEPTADO_CON_REPAROS',
-      'RECHAZADO':             'RECHAZADO',
-      'PENDIENTE':             'PENDIENTE',
-      // BaseAPI.cl variations
-      'ACCEPTED':              'ACEPTADO',
-      'ACCEPTED_WITH_ISSUES':  'ACEPTADO_CON_REPAROS',
-      'REJECTED':              'RECHAZADO',
-      'PENDING':               'PENDIENTE',
-    };
+  private parseDate(dateStr: string | undefined): Date {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T12:00:00Z`);
+    }
+    return new Date(dateStr);
+  }
 
-    return mapping[normalized] || 'PENDIENTE';
+  // =========================================================================
+  // Utilities
+  // =========================================================================
+
+  /**
+   * Asegura que el RUT vaya limpio de puntos, pero estrictamente con el guion
+   * antes del dígito verificador. (Ej: "123456785" o "12.345.678-5" -> "12345678-5")
+   */
+  private formatRutForApi(rut: string): string {
+    if (!rut) return rut;
+    // Quitamos todos los puntos y guiones previos
+    const clean = rut.replace(/[\.\-]/g, '').toUpperCase();
+    if (clean.length < 2) return rut;
+    
+    // Separamos el cuerpo (todo excepto el último caracter) y el dígito verificador (último caracter)
+    const body = clean.slice(0, -1);
+    const dv = clean.slice(-1);
+    
+    return `${body}-${dv}`;
+  }
+
+  private maskRut(rut: string): string {
+    if (rut.length < 4) return '***';
+    return rut.slice(0, 3) + '*'.repeat(Math.max(0, rut.length - 5)) + rut.slice(-2);
   }
 
   // =========================================================================
@@ -272,22 +250,16 @@ export class BaseApiSiiRepository implements ISiiRepository {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body?: Record<string, unknown>,
-    extraHeaders?: Record<string, string>,
-    queryParams?: Record<string, string>,
   ): Promise<T> {
-    const url = new URL(`${this.baseUrl}${path}`);
-
-    if (queryParams) {
-      for (const [key, value] of Object.entries(queryParams)) {
-        url.searchParams.set(key, value);
-      }
-    }
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const urlString = `${this.baseUrl}${normalizedPath}`;
+    
+    this.logger.debug(`Llamando a la API: ${urlString}`);
 
     const headers: Record<string, string> = {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${this.apiToken}`,
+      'x-api-key':     this.apiToken, 
       'Accept':        'application/json',
-      ...extraHeaders,
     };
 
     const fetchOptions: RequestInit = {
@@ -296,73 +268,43 @@ export class BaseApiSiiRepository implements ISiiRepository {
       ...(body ? { body: JSON.stringify(body) } : {}),
     };
 
-    // Attempt with one retry on transient failures
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await fetch(url.toString(), fetchOptions);
+        const response = await fetch(urlString, fetchOptions);
+        const responseText = await response.text();
 
         if (!response.ok) {
-          const errorBody = await response.text().catch(() => 'No body');
-
-          // Don't retry auth failures or client errors (4xx)
-          if (response.status >= 400 && response.status < 500) {
-            throw new BaseApiError(
-              `BaseAPI.cl ${response.status}: ${this.sanitizeErrorBody(errorBody)}`,
-              response.status,
-            );
-          }
-
-          // Retry on 5xx
           if (attempt === 0 && response.status >= 500) {
-            this.logger.warn(
-              `BaseAPI.cl ${method} ${path} returned ${response.status}, retrying in 2s...`,
-            );
             await this.delay(2000);
             continue;
           }
-
-          throw new BaseApiError(
-            `BaseAPI.cl ${response.status}: ${this.sanitizeErrorBody(errorBody)}`,
-            response.status,
-          );
+          throw new BaseApiError(`BaseAPI HTTP ${response.status}: ${this.sanitizeErrorBody(responseText)}`, response.status);
         }
 
-        return await response.json() as T;
+        const jsonResponse = JSON.parse(responseText);
+        if (jsonResponse.success === false) {
+           throw new BaseApiError(`BaseAPI Error: ${jsonResponse.message || 'Desconocido'}`, 400);
+        }
+
+        return jsonResponse as T;
       } catch (error) {
         if (error instanceof BaseApiError) throw error;
-
         lastError = error as Error;
         if (attempt === 0) {
-          this.logger.warn(
-            `BaseAPI.cl ${method} ${path} failed: ${lastError.message}, retrying in 2s...`,
-          );
           await this.delay(2000);
         }
       }
     }
 
     throw new BaseApiError(
-      `BaseAPI.cl request failed after 2 attempts: ${lastError?.message ?? 'unknown error'}`,
+      `BaseAPI request failed after 2 attempts: ${lastError?.message ?? 'unknown error'}`,
       503,
     );
   }
 
-  // =========================================================================
-  // Utilities
-  // =========================================================================
-
-  /** Mask RUT for logging: 12.345.678-5 → 12.***.**8-5 */
-  private maskRut(rut: string): string {
-    if (rut.length < 4) return '***';
-    return rut.slice(0, 3) + '*'.repeat(Math.max(0, rut.length - 5)) + rut.slice(-2);
-  }
-
-  /** Truncate and sanitize error bodies to prevent log injection */
   private sanitizeErrorBody(body: string): string {
-    return body
-      .replace(/[\n\r]/g, ' ')
-      .slice(0, 200);
+    return body.replace(/[\n\r]/g, ' ').slice(0, 200);
   }
 
   private delay(ms: number): Promise<void> {
@@ -370,15 +312,8 @@ export class BaseApiSiiRepository implements ISiiRepository {
   }
 }
 
-/**
- * Custom error for BaseAPI.cl failures.
- * Carries the HTTP status code for upstream handling.
- */
 export class BaseApiError extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode: number,
-  ) {
+  constructor(message: string, public readonly statusCode: number) {
     super(message);
     this.name = 'BaseApiError';
   }
