@@ -28,6 +28,13 @@ interface ProcessInstanceProps {
   completedNodeIds:   string[];
   /** Mutable process context shared across nodes. */
   variables:          Record<string, unknown>;
+  /**
+   * Tracks how many parallel branches have arrived at each join gateway.
+   * Key = gateway nodeId, Value = number of branches that have arrived.
+   * Used for AND-gateway synchronization: the join only fires when
+   * arrivals === number of incoming transitions.
+   */
+  joinArrivalCount:   Record<string, number>;
   startedBy:          string;
   startedAt:          Date;
   completedAt:        Date | null;
@@ -91,6 +98,7 @@ export class ProcessInstance extends AggregateRoot<ProcessInstanceProps> {
       activeNodeIds:      [raw.initialNodeId],
       completedNodeIds:   [],
       variables:          raw.variables ?? {},
+      joinArrivalCount:   {},
       startedBy:          raw.startedBy,
       startedAt:          new Date(),
       completedAt:        null,
@@ -128,6 +136,7 @@ export class ProcessInstance extends AggregateRoot<ProcessInstanceProps> {
   get activeNodeIds():      string[]                         { return [...this.props.activeNodeIds]; }
   get completedNodeIds():   string[]                         { return [...this.props.completedNodeIds]; }
   get variables():          Record<string, unknown>          { return { ...this.props.variables }; }
+  get joinArrivalCount():   Record<string, number>           { return { ...this.props.joinArrivalCount }; }
   get startedBy():          string                           { return this.props.startedBy; }
   get startedAt():          Date                             { return this.props.startedAt; }
   get completedAt():        Date | null                      { return this.props.completedAt; }
@@ -167,8 +176,15 @@ export class ProcessInstance extends AggregateRoot<ProcessInstanceProps> {
    * Marks nodeId as completed and activates nextNodeIds.
    * If nextNodeIds is empty and no other nodes remain active, the instance
    * transitions to COMPLETED automatically.
+   *
+   * Guards:
+   *   - If nodeId is NOT in activeNodeIds the call is a no-op (prevents state corruption).
    */
   completeNode(nodeId: string, nextNodeIds: string[]): void {
+    if (!this.props.activeNodeIds.includes(nodeId)) {
+      return; // Node not active — no-op to prevent state corruption
+    }
+
     this.props.activeNodeIds = this.props.activeNodeIds.filter((id) => id !== nodeId);
 
     if (!this.props.completedNodeIds.includes(nodeId)) {
@@ -184,6 +200,24 @@ export class ProcessInstance extends AggregateRoot<ProcessInstanceProps> {
     if (nextNodeIds.length === 0 && this.props.activeNodeIds.length === 0) {
       this.complete();
     }
+  }
+
+  /**
+   * Registers the arrival of one parallel branch at a join gateway node.
+   * Returns the updated total number of arrivals for that node.
+   */
+  registerJoinArrival(nodeId: string): number {
+    this.props.joinArrivalCount[nodeId] =
+      (this.props.joinArrivalCount[nodeId] ?? 0) + 1;
+    return this.props.joinArrivalCount[nodeId];
+  }
+
+  /**
+   * Returns the current number of parallel branches that have arrived
+   * at the given join gateway node.
+   */
+  getJoinArrivals(nodeId: string): number {
+    return this.props.joinArrivalCount[nodeId] ?? 0;
   }
 
   /** Transitions the instance to COMPLETED and emits the corresponding event. */

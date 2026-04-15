@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { proxyGet, proxyPost } from '@/lib/apiProxy';
 import type { ProcessDefinition } from '@/types/bpms';
 
 // ---------------------------------------------------------------------------
@@ -53,85 +53,24 @@ const MOCK_DEFINITIONS: ProcessDefinition[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-const BACKEND_URL = process.env.BACKEND_URL ?? '';
-const TENANT_HEADER = { 'x-tenant-id': 'tnt_demo01', 'Content-Type': 'application/json' };
-
-function useMock(): boolean {
-  return !BACKEND_URL;
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/bpms/definitions
-// ---------------------------------------------------------------------------
-
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (useMock()) {
-    return NextResponse.json(MOCK_DEFINITIONS);
-  }
-
-  try {
-    const { searchParams } = req.nextUrl;
-    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
-
-    const res = await fetch(`${BACKEND_URL}/api/bpms/definitions${qs}`, {
-      headers: TENANT_HEADER,
-      cache: 'no-store',
-    });
-
-    if (!res.ok) throw new Error(`Backend responded with ${res.status}`);
-    return NextResponse.json(await res.json());
-  } catch (err) {
-    console.error('[BPMS] definitions GET failed, falling back to mock:', (err as Error).message);
-    return NextResponse.json(MOCK_DEFINITIONS);
-  }
-}
+const MOCK_POST: ProcessDefinition = {
+  id: `mock-${Date.now()}`,
+  tenantId: 'tnt_demo01',
+  name: '',
+  description: '',
+  version: 1,
+  status: 'DRAFT',
+  category: '',
+  createdBy: 'anonymous',
+  nodes: [],
+  transitions: [],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
 
 // ---------------------------------------------------------------------------
-// POST /api/bpms/definitions
+// Handlers
 // ---------------------------------------------------------------------------
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  const body = await req.json();
-
-  if (useMock()) {
-    const mock: ProcessDefinition = {
-      id: `mock-${Date.now()}`,
-      ...body,
-      status: 'DRAFT',
-      version: 1,
-      nodes: [],
-      transitions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    return NextResponse.json(mock, { status: 201 });
-  }
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/bpms/definitions`, {
-      method: 'POST',
-      headers: TENANT_HEADER,
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) throw new Error(`Backend responded with ${res.status}`);
-    return NextResponse.json(await res.json(), { status: 201 });
-  } catch (err) {
-    console.error('[BPMS] definitions POST failed, falling back to mock:', (err as Error).message);
-    const mock: ProcessDefinition = {
-      id: `mock-${Date.now()}`,
-      ...body,
-      status: 'DRAFT',
-      version: 1,
-      nodes: [],
-      transitions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    return NextResponse.json(mock, { status: 201 });
-  }
-}
+export const GET  = proxyGet('/api/bpms/definitions', MOCK_DEFINITIONS, { tag: 'BPMS' });
+export const POST = proxyPost('/api/bpms/definitions', MOCK_POST, { mockStatus: 201, successStatus: 201, tag: 'BPMS' });

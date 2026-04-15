@@ -91,7 +91,7 @@ export class ProcessTemplateSeeder {
     fixed.addTransition(Transition.create('n4',  'n6',  [{ field: 'outcome', operator: TransitionConditionOperator.EQUALS, value: 'APROBADO' }], 0, false));
     fixed.addTransition(Transition.create('n4',  'n5',  [], 1, true));
     fixed.addTransition(Transition.create('n5',  'n3',  []));  // loop back
-    fixed.addTransition(Transition.create('n6',  'n8',  []));
+    fixed.addTransition(Transition.create('n6',  'n7',  []));  // was n6→n8 — n7 was orphaned
     fixed.addTransition(Transition.create('n7',  'n8',  []));
     fixed.addTransition(Transition.create('n8',  'n9',  []));
     fixed.addTransition(Transition.create('n9',  'n10', []));

@@ -27,21 +27,7 @@ import { MaterialSku } from '../../domain/value-objects/MaterialSku';
 import { Dimensions } from '../../domain/value-objects/Dimensions';
 import { UniqueId } from '../../../../shared/kernel';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper — extract tenantId from middleware or fall back to header (dev mode)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function resolveTenantId(req: Request): string {
-  // When TenantMiddleware runs it populates req.authenticatedUser
-  const user = (req as any).authenticatedUser;
-  if (user?.tenantId) return user.tenantId;
-
-  // Dev-mode: accept x-tenant-id header directly (route is excluded from TenantMiddleware)
-  const header = req.headers['x-tenant-id'];
-  if (typeof header === 'string' && header) return header;
-
-  return 'tnt_demo01'; // last-resort dev fallback
-}
+import { resolveTenantId } from '../../../../shared/helpers/resolveTenantId';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DTOs

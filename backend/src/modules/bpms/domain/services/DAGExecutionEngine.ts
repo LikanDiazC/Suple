@@ -302,7 +302,12 @@ export class DAGExecutionEngine {
 
     while (steps < maxSteps) {
       steps++;
-      const currentNode = graph.nodes.find((n) => n.id === currentNodeId)!;
+      const currentNode = graph.nodes.find((n) => n.id === currentNodeId);
+      if (!currentNode) {
+        return Result.fail(
+          `Execution error: node "${currentNodeId}" referenced by a transition does not exist in the graph`,
+        );
+      }
 
       // Terminal condition: END_EVENT reached.
       if (currentNode.type === NodeType.END_EVENT) {
@@ -327,9 +332,11 @@ export class DAGExecutionEngine {
         return Result.ok({ trace, stoppedAt: currentNodeId, completed: true });
       }
 
-      // For parallel gateways, all branches execute.
-      // Simplified: follow the first branch for linear execution.
-      // Full parallel execution requires a process instance state machine.
+      // NOTE: For parallel gateways this follows only the first branch.
+      // Full parallel execution is handled by CompleteTask.processNodes()
+      // which iterates ALL toNodeIds and implements AND-gateway join
+      // synchronization via ProcessInstance.registerJoinArrival().
+      // This method is a linear simulation/preview only.
       currentNodeId = step.toNodeIds[0];
     }
 

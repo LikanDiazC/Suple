@@ -10,61 +10,13 @@ import {
   staggerItem,
 } from '../../../../../presentation/animations/variants';
 import type { ProcessInstance, ProcessInstanceStatus, Task, TaskStatus } from '../../../../../types/bpms';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Status config — instance
-// ---------------------------------------------------------------------------
-
-const INSTANCE_BADGE: Record<ProcessInstanceStatus, string> = {
-  ACTIVE:    'bg-blue-50 text-blue-700',
-  COMPLETED: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-neutral-100 text-neutral-500',
-  SUSPENDED: 'bg-amber-50 text-amber-700',
-  ERROR:     'bg-red-50 text-red-700',
-};
-
-const INSTANCE_LABELS: Record<ProcessInstanceStatus, string> = {
-  ACTIVE:    'Activo',
-  COMPLETED: 'Completado',
-  CANCELLED: 'Cancelado',
-  SUSPENDED: 'Suspendido',
-  ERROR:     'Error',
-};
-
-// ---------------------------------------------------------------------------
-// Status config — task
-// ---------------------------------------------------------------------------
-
-const TASK_BADGE: Record<TaskStatus, string> = {
-  PENDING:     'bg-blue-50 text-blue-700',
-  IN_PROGRESS: 'bg-amber-50 text-amber-700',
-  OVERDUE:     'bg-red-50 text-red-700',
-  COMPLETED:   'bg-green-50 text-green-700',
-  CANCELLED:   'bg-neutral-100 text-neutral-500',
-};
-
-const TASK_LABELS: Record<TaskStatus, string> = {
-  PENDING:     'Pendiente',
-  IN_PROGRESS: 'En progreso',
-  OVERDUE:     'Vencida',
-  COMPLETED:   'Completada',
-  CANCELLED:   'Cancelada',
-};
+import { formatDate } from '../../../../../lib/formatters';
+import {
+  INSTANCE_STATUS_BADGE  as INSTANCE_BADGE,
+  INSTANCE_STATUS_LABELS as INSTANCE_LABELS,
+  TASK_STATUS_BADGE      as TASK_BADGE,
+  TASK_STATUS_LABELS     as TASK_LABELS,
+} from '../../../../../lib/statusConfig';
 
 // ---------------------------------------------------------------------------
 // Cancel confirm dialog variants

@@ -40,19 +40,7 @@ import { CompleteTask as CompleteTaskUseCase } from '../../application/use-cases
 import { CreateProcessDefinition as CreateProcessDefinitionUseCase } from '../../application/use-cases/CreateProcessDefinition';
 import { GetTasksForUser as GetTasksForUserUseCase } from '../../application/use-cases/GetTasksForUser';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper — extract tenantId (same pattern as ScmController)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function resolveTenantId(req: Request): string {
-  const user = (req as any).authenticatedUser;
-  if (user?.tenantId) return user.tenantId;
-
-  const header = req.headers['x-tenant-id'];
-  if (typeof header === 'string' && header) return header;
-
-  return 'tnt_demo01';
-}
+import { resolveTenantId } from '../../../../shared/helpers/resolveTenantId';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Serializers — domain aggregates → plain JSON (no class-transformer)
@@ -121,6 +109,10 @@ function serializeInstance(inst: any) {
 }
 
 function serializeTask(task: any) {
+  const dueDate: Date | null = task.dueDate;
+  const isTerminal = task.status === 'COMPLETED' || task.status === 'CANCELLED';
+  const isOverdue  = !!dueDate && !isTerminal && dueDate.getTime() < Date.now();
+
   return {
     id:               task.id.toString(),
     tenantId:         task.tenantId,
@@ -137,6 +129,7 @@ function serializeTask(task: any) {
     completedBy:      task.completedBy,
     completedAt:      task.completedAt,
     dueDate:          task.dueDate,
+    isOverdue,
     outcome:          task.outcome,
     form:             task.form,
     approvalOutcomes: task.approvalOutcomes,

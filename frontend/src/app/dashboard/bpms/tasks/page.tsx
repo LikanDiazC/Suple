@@ -10,52 +10,12 @@ import {
   staggerItem,
 } from '../../../../presentation/animations/variants';
 import type { FormField, Task, TaskStatus } from '../../../../types/bpms';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function hoursAgo(iso: string): number {
-  return Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000);
-}
-
-// ---------------------------------------------------------------------------
-// Status config
-// ---------------------------------------------------------------------------
-
-const STATUS_BORDER: Record<TaskStatus, string> = {
-  PENDING:     'border-l-blue-400',
-  IN_PROGRESS: 'border-l-amber-400',
-  OVERDUE:     'border-l-red-500',
-  COMPLETED:   'border-l-green-400',
-  CANCELLED:   'border-l-neutral-300',
-};
-
-const STATUS_BADGE: Record<TaskStatus, string> = {
-  PENDING:     'bg-blue-50 text-blue-700',
-  IN_PROGRESS: 'bg-amber-50 text-amber-700',
-  OVERDUE:     'bg-red-50 text-red-700',
-  COMPLETED:   'bg-green-50 text-green-700',
-  CANCELLED:   'bg-neutral-100 text-neutral-500',
-};
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  PENDING:     'Pendiente',
-  IN_PROGRESS: 'En progreso',
-  OVERDUE:     'Vencida',
-  COMPLETED:   'Completada',
-  CANCELLED:   'Cancelada',
-};
+import { formatDate, hoursAgo } from '../../../../lib/formatters';
+import {
+  TASK_STATUS_BORDER  as STATUS_BORDER,
+  TASK_STATUS_BADGE   as STATUS_BADGE,
+  TASK_STATUS_LABELS  as STATUS_LABELS,
+} from '../../../../lib/statusConfig';
 
 const FILTER_OPTIONS: { label: string; value: string }[] = [
   { label: 'Todas',       value: 'ALL' },

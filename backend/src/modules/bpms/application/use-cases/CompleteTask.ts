@@ -215,10 +215,49 @@ export class CompleteTask {
           break;
         }
 
+        case NodeType.PARALLEL_GATEWAY: {
+          // AND-gateway: may act as FORK (1 incoming, N outgoing) or
+          // JOIN (N incoming, 1+ outgoing). Joins require synchronization:
+          // all incoming branches must arrive before we proceed.
+          const incomingCount = graph.transitions.filter(
+            (t) => t.toNodeId === node.id,
+          ).length;
+
+          if (incomingCount > 1) {
+            // JOIN: register this branch's arrival
+            const arrivals = instance.registerJoinArrival(node.id);
+            if (arrivals < incomingCount) {
+              // Not all parallel branches have arrived — keep in activeNodeIds, wait.
+              break;
+            }
+            // All branches arrived — fall through to resolve outgoing transitions.
+          }
+
+          const parallelNextResult = this.engine.resolveNextNodes(
+            graph,
+            node.id,
+            instance.variables,
+          );
+          if (parallelNextResult.isFail()) break;
+
+          const parallelNextIds = parallelNextResult.value.toNodeIds;
+          instance.completeNode(node.id, parallelNextIds);
+
+          await this.processNodes(
+            tenantId,
+            graph,
+            instance,
+            parallelNextIds,
+            definitionId,
+            newTasks,
+            depth + 1,
+          );
+          break;
+        }
+
         case NodeType.EXCLUSIVE_GATEWAY:
-        case NodeType.PARALLEL_GATEWAY:
         case NodeType.INCLUSIVE_GATEWAY: {
-          // Gateways do not create tasks — they only route.
+          // XOR / OR gateways — route based on conditions, no synchronization.
           const gatewayNextResult = this.engine.resolveNextNodes(
             graph,
             node.id,

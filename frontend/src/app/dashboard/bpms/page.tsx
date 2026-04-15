@@ -65,33 +65,11 @@ function IconActivity() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Status badge helpers
-// ---------------------------------------------------------------------------
-
-const INSTANCE_STATUS_STYLES: Record<string, string> = {
-  ACTIVE:    'bg-blue-50 text-blue-700',
-  COMPLETED: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-neutral-100 text-neutral-500',
-  SUSPENDED: 'bg-amber-50 text-amber-700',
-  ERROR:     'bg-red-50 text-red-700',
-};
-
-const INSTANCE_STATUS_LABELS: Record<string, string> = {
-  ACTIVE:    'Activo',
-  COMPLETED: 'Completado',
-  CANCELLED: 'Cancelado',
-  SUSPENDED: 'Suspendido',
-  ERROR:     'Error',
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
+import { formatDateShort as formatDate } from '../../../lib/formatters';
+import {
+  INSTANCE_STATUS_BADGE  as INSTANCE_STATUS_STYLES,
+  INSTANCE_STATUS_LABELS,
+} from '../../../lib/statusConfig';
 
 // ---------------------------------------------------------------------------
 // Component

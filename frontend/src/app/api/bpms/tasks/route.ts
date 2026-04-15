@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { useMock, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
 import type { Task } from '@/types/bpms';
 
 // ---------------------------------------------------------------------------
@@ -90,17 +91,6 @@ const MOCK_TASKS: Task[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-const BACKEND_URL = process.env.BACKEND_URL ?? '';
-const TENANT_HEADER = { 'x-tenant-id': 'tnt_demo01', 'Content-Type': 'application/json' };
-
-function useMock(): boolean {
-  return !BACKEND_URL;
-}
-
-// ---------------------------------------------------------------------------
 // GET /api/bpms/tasks
 // query: userId?, roles? (comma-separated), status?, page=1, limit=20
 // ---------------------------------------------------------------------------
@@ -142,7 +132,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
     const res = await fetch(`${BACKEND_URL}/api/bpms/tasks${qs}`, {
-      headers: TENANT_HEADER,
+      headers: backendHeaders(),
       cache: 'no-store',
     });
 

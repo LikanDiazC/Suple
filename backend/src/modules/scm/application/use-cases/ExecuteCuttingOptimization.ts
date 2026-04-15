@@ -172,6 +172,15 @@ export class ExecuteCuttingOptimizationUseCase {
 
     const plan = engineResult.value;
 
+    // Reject empty plans — all pieces unplaced means the stock doesn't fit
+    if (plan.boardAllocations.length === 0) {
+      const unplaced = plan.unplacedPieceIds?.join(', ') ?? 'all';
+      throw new UnprocessableEntityException(
+        `Cutting engine placed 0 pieces. Unplaceable piece IDs: [${unplaced}]. ` +
+        'Verify that stock dimensions can accommodate the required pieces.',
+      );
+    }
+
     // ── 5a. Reserve the boards/offcuts used in the plan ───────────────────────
 
     const usedIds = plan.boardAllocations.map(a => a.boardId);

@@ -4,27 +4,20 @@ import {
   ITaskRepository,
   TaskQuery,
 } from '../../domain/repositories/ITaskRepository';
+import { BaseInMemoryRepository } from '../../../../shared/infrastructure/BaseInMemoryRepository';
 
 @Injectable()
-export class InMemoryTaskRepository implements ITaskRepository {
-  private readonly store = new Map<string, Task>();
-
-  async findById(tenantId: string, id: string): Promise<Task | null> {
-    const task = this.store.get(id);
-    if (!task) return null;
-    return task.tenantId === tenantId ? task : null;
-  }
-
+export class InMemoryTaskRepository
+  extends BaseInMemoryRepository<Task>
+  implements ITaskRepository
+{
   async findByInstanceAndNode(
     tenantId: string,
     instanceId: string,
     nodeId: string,
   ): Promise<Task[]> {
-    return [...this.store.values()].filter(
-      (task) =>
-        task.tenantId === tenantId &&
-        task.instanceId === instanceId &&
-        task.nodeId === nodeId,
+    return this.allForTenant(tenantId).filter(
+      (task) => task.instanceId === instanceId && task.nodeId === nodeId,
     );
   }
 
@@ -35,9 +28,8 @@ export class InMemoryTaskRepository implements ITaskRepository {
       TaskStatus.OVERDUE,
     ]);
 
-    return [...this.store.values()].filter(
+    return this.allForTenant(tenantId).filter(
       (task) =>
-        task.tenantId === tenantId &&
         task.dueDate !== null &&
         task.dueDate < before &&
         overdueStatuses.has(task.status),
@@ -45,9 +37,7 @@ export class InMemoryTaskRepository implements ITaskRepository {
   }
 
   async list(query: TaskQuery): Promise<{ items: Task[]; total: number }> {
-    let items = [...this.store.values()].filter((task) => {
-      if (task.tenantId !== query.tenantId) return false;
-
+    const filtered = this.allForTenant(query.tenantId).filter((task) => {
       // Assignee filter — OR logic between userId and role
       if (query.assigneeUserId !== undefined || query.assigneeRole !== undefined) {
         const matchesUser =
@@ -74,20 +64,6 @@ export class InMemoryTaskRepository implements ITaskRepository {
       return true;
     });
 
-    const total = items.length;
-    const start = (query.page - 1) * query.limit;
-    items = items.slice(start, start + query.limit);
-
-    return { items, total };
-  }
-
-  async save(task: Task): Promise<void> {
-    this.store.set(task.id.toString(), task);
-  }
-
-  async saveMany(tasks: Task[]): Promise<void> {
-    for (const task of tasks) {
-      this.store.set(task.id.toString(), task);
-    }
+    return this.paginate(filtered, query.page, query.limit);
   }
 }

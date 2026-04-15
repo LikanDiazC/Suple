@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, BadRequestException } from '@nestjs/common';
 import { CreateContactUseCase } from '../../application/use-cases/CreateContact';
 import { CreateContactDto, CreateContactResultDto } from '../../application/dtos/ContactDto';
 import { RbacAbacGuard, RequirePermissions } from '../../../iam/infrastructure/guards/RbacGuard';
@@ -30,7 +30,7 @@ export class ContactController {
     const result = await this.createContact.execute(ctx.tenantId, dto);
 
     if (result.isFail()) {
-      throw new Error(result.error);
+      throw new BadRequestException(result.error);
     }
 
     return result.value;

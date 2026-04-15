@@ -10,6 +10,8 @@ import {
   staggerItem,
 } from '../../../../presentation/animations/variants';
 import type { ProcessInstance, ProcessInstanceStatus, BpmsAnalytics } from '../../../../types/bpms';
+import { formatDate, truncateId } from '../../../../lib/formatters';
+import { INSTANCE_STATUS_STYLES as STATUS_STYLES } from '../../../../lib/statusConfig';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers
@@ -18,32 +20,10 @@ import type { ProcessInstance, ProcessInstanceStatus, BpmsAnalytics } from '../.
 const ALL_STATUSES = ['Todos', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'ERROR'] as const;
 type StatusFilter = typeof ALL_STATUSES[number];
 
-const STATUS_STYLES: Record<ProcessInstanceStatus, { badge: string; dot: string; label: string }> = {
-  ACTIVE:    { badge: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',     dot: 'bg-blue-500',    label: 'Activo'      },
-  COMPLETED: { badge: 'bg-green-50 text-green-700 ring-1 ring-green-200',  dot: 'bg-green-500',   label: 'Completado'  },
-  CANCELLED: { badge: 'bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200', dot: 'bg-neutral-400', label: 'Cancelado'   },
-  SUSPENDED: { badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',  dot: 'bg-amber-500',   label: 'Suspendido'  },
-  ERROR:     { badge: 'bg-red-50 text-red-700 ring-1 ring-red-200',        dot: 'bg-red-600',     label: 'Error'       },
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function progressPercent(instance: ProcessInstance): number {
   const total = instance.completedNodeIds.length + instance.activeNodeIds.length;
   if (total === 0) return 0;
   return Math.round((instance.completedNodeIds.length / total) * 100);
-}
-
-function truncateId(id: string, maxLen = 12): string {
-  return id.length > maxLen ? `${id.slice(0, maxLen)}…` : id;
 }
 
 // ---------------------------------------------------------------------------
