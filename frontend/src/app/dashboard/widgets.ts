@@ -17,7 +17,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   { id: 'pipeline-chart', label: 'Evolución Pipeline',       description: 'Barras de valor de pipeline por semana',     defaultEnabled: true,  category: 'charts' },
   { id: 'emails',         label: 'Correos importantes',      description: 'Últimos emails destacados',                  defaultEnabled: true,  category: 'lists' },
   { id: 'deals',          label: 'Deals recientes',          description: 'Pipeline de ventas activo',                  defaultEnabled: true,  category: 'lists' },
-  { id: 'channel-spend',  label: 'Gasto por canal',          description: 'Marketing — distribución de presupuesto',    defaultEnabled: true,  category: 'charts' },
+  { id: 'channel-spend',  label: 'Gasto por canal',          description: 'Marketing — distribución de presupuesto',    defaultEnabled: false,  category: 'charts' },
   { id: 'sii-summary',    label: 'Resumen SII',              description: 'Estado tributario y próximas declaraciones', defaultEnabled: true,  category: 'modules' },
   { id: 'bpms-tasks',     label: 'Tareas BPMS pendientes',   description: 'Tus tareas de flujos activos',               defaultEnabled: true,  category: 'modules' },
   { id: 'scm-status',     label: 'Estado SCM',               description: 'Planchas disponibles y órdenes activas',     defaultEnabled: false, category: 'modules' },

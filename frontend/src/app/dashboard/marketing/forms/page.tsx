@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../../presentation/animations/variants';
+import { isDemoClient } from '../../../../lib/demoMode';
+import EmptyMarketingState from '../../../../presentation/components/marketing/EmptyMarketingState';
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -33,12 +35,12 @@ const STATUS_STYLE: Record<FormStatus, { label: string; class: string; dot: stri
 const FORMS: CaptureForm[] = [
   {
     id: 'f1',
-    name: 'Demo Request — Enterprise',
-    description: 'Solicitud de demo para prospectos B2B interesados en el plan Enterprise.',
+    name: 'Demo Request — Suple',
+    description: 'Solicitud de demo para prospectos B2B interesados en el plan Suple.',
     status: 'published',
     leads: 124, views: 674, convRate: 18.4,
     fields: ['Nombre', 'Empresa', 'Correo', 'Teléfono', 'N° empleados'],
-    connectedCampaigns: ['LinkedIn B2B Enterprise', 'Google Search — ICI Ingeniería'],
+    connectedCampaigns: ['LinkedIn B2B Suple', 'Google Search — ICI Ingeniería'],
     createdAt: '2026-03-01',
     embedUrl: 'https://forms.empresa.com/demo-enterprise',
   },
@@ -89,7 +91,7 @@ const FORMS: CaptureForm[] = [
   {
     id: 'f6',
     name: 'Prueba gratuita — 14 días',
-    description: 'Trial gratuito de la plataforma Enterprise SaaS por 14 días sin tarjeta.',
+    description: 'Trial gratuito de la plataforma Suple SaaS por 14 días sin tarjeta.',
     status: 'draft',
     leads: 0, views: 0, convRate: 0,
     fields: ['Nombre', 'Correo empresarial', 'Empresa', 'País', 'Tamaño equipo'],
@@ -107,8 +109,15 @@ const fmtN   = (n: number)   => new Intl.NumberFormat('es-CL').format(n);
 // ---------------------------------------------------------------------------
 
 export default function FormsPage() {
+  const [isDemo, setIsDemo] = useState(true);
   const [statusFilter, setStatusFilter] = useState<FormStatus | 'all'>('all');
   const [embedFormId, setEmbedFormId]   = useState<string | null>(null);
+
+  useEffect(() => { setIsDemo(isDemoClient()); }, []);
+
+  if (!isDemo) {
+    return <EmptyMarketingState title="Sin formularios" description="Conecta al menos una plataforma de marketing para ver tus formularios de captura de leads." />;
+  }
 
   const displayed = statusFilter === 'all' ? FORMS : FORMS.filter(f => f.status === statusFilter);
   const embedForm = FORMS.find(f => f.id === embedFormId);
@@ -257,7 +266,7 @@ export default function FormsPage() {
             </div>
             <p className="text-xs text-neutral-500 mb-3">Copia este código e incrústalo en cualquier página de tu sitio web.</p>
             <pre className="bg-neutral-900 text-green-400 text-[11px] rounded-lg p-4 overflow-x-auto font-mono leading-relaxed">
-{`<!-- Enterprise Forms — ${embedForm.name} -->
+{`<!-- Suple Forms — ${embedForm.name} -->
 <script src="https://forms.empresa.com/embed.js"
   data-form-id="${embedForm.id}"
   data-form-url="${embedForm.embedUrl}"

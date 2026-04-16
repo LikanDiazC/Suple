@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { google } from 'googleapis';
 import { getOAuth2Client } from '@/lib/google';
+import { isDemoRequest } from '@/lib/demoMode';
 
 /**
  * Dynamic API route for CRM object records.
@@ -71,11 +72,17 @@ export async function GET(
 
   let records: { id: string; properties: Record<string, string> }[] = [];
 
-  // ── Try Google People API when user is authenticated ──────────────────────
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  // ── Demo mode → skip Google API entirely, use fallback data ──────────────
+  const isDemo = isDemoRequest(request);
+
+  // ── Try Google People API when user is authenticated (non-demo) ──────────
+  const token = isDemo
+    ? null
+    : await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
 
   // Skip People API if token is missing or refresh failed (expired token)
   const canUsePeopleApi =
+    !isDemo &&
     token?.accessToken &&
     token.error !== 'RefreshAccessTokenError' &&
     (objectType === 'contacts' || objectType === 'companies');

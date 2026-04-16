@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
 import type { WorkOrder, WorkOrderListResponse, CuttingRequirement } from '@/types/scm';
 
 // ---------------------------------------------------------------------------
@@ -163,8 +164,10 @@ const MOCK_WORK_ORDERS: WorkOrder[] = [MOCK_PENDING, MOCK_COMPLETED, MOCK_OPTIMI
 const BACKEND_URL = process.env.BACKEND_URL ?? '';
 const TENANT_HEADER = { 'x-tenant-id': 'tnt_demo01' };
 
-function useMock(): boolean {
-  return !BACKEND_URL;
+function useMockLocal(req?: NextRequest): boolean {
+  if (!BACKEND_URL) return true;
+  if (req && isDemoRequest(req)) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +180,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') ?? '20', 10)));
   const status = searchParams.get('status') ?? '';
 
-  if (useMock()) {
+  if (useMockLocal(req)) {
     let items = MOCK_WORK_ORDERS;
     if (status) {
       items = items.filter((wo) => wo.status === status);
@@ -231,7 +234,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'requirements must be a non-empty array' }, { status: 422 });
   }
 
-  if (useMock()) {
+  if (useMockLocal(req)) {
     const newOrder: WorkOrder = {
       id: `wo-mock-${Date.now()}`,
       tenantId: 'tnt_demo01',

@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { pageTransition, staggerContainer, staggerItem } from '../../../../presentation/animations/variants';
 import { useCurrency } from '../../../../application/context/currency/CurrencyContext';
+import { isDemoClient } from '../../../../lib/demoMode';
+import EmptyMarketingState from '../../../../presentation/components/marketing/EmptyMarketingState';
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -32,7 +34,7 @@ const CAMPAIGNS: Campaign[] = [
   { id: 'cmp1', name: 'Captación UDLA Q2 2026',          channels: ['meta','tiktok'],  status: 'active',    budget: 5000,  spend: 3247, impressions: 180400, clicks: 4320, conversions: 89, cpa: 36.48, startDate: '2026-04-01', endDate: '2026-06-30' },
   { id: 'cmp2', name: 'Remarketing Fracttal',             channels: ['meta'],           status: 'active',    budget: 2000,  spend: 1890, impressions: 95200,  clicks: 2856, conversions: 45, cpa: 42.00, startDate: '2026-03-15', endDate: '2026-05-15' },
   { id: 'cmp3', name: 'Google Search — ICI Ingeniería',   channels: ['google'],         status: 'active',    budget: 3500,  spend: 2100, impressions: 42000,  clicks: 3780, conversions: 72, cpa: 29.17, startDate: '2026-04-01', endDate: '2026-05-31' },
-  { id: 'cmp4', name: 'LinkedIn B2B Enterprise',          channels: ['linkedin'],       status: 'paused',    budget: 4000,  spend: 1650, impressions: 28000,  clicks: 840,  conversions: 12, cpa: 137.5, startDate: '2026-03-01', endDate: '2026-06-30' },
+  { id: 'cmp4', name: 'LinkedIn B2B Suple',          channels: ['linkedin'],       status: 'paused',    budget: 4000,  spend: 1650, impressions: 28000,  clicks: 840,  conversions: 12, cpa: 137.5, startDate: '2026-03-01', endDate: '2026-06-30' },
   { id: 'cmp5', name: 'TikTok Brand Awareness',           channels: ['tiktok'],         status: 'active',    budget: 1500,  spend: 890,  impressions: 420000, clicks: 8400, conversions: 28, cpa: 31.79, startDate: '2026-04-10', endDate: '2026-05-10' },
   { id: 'cmp6', name: 'Email Newsletter — Abril 2026',    channels: ['email'],          status: 'completed', budget: 500,   spend: 500,  impressions: 8500,   clicks: 850,  conversions: 85, cpa: 5.88,  startDate: '2026-04-01', endDate: '2026-04-30' },
 ];
@@ -100,10 +102,13 @@ function KpiCard({ label, value, delta, positive, sub }: KpiCardProps) {
 
 export default function CampaignsPage() {
   const { fmt: fmtUSD, code: currCode } = useCurrency();
+  const [isDemo, setIsDemo] = useState(true);
   const [activeTab, setActiveTab] = useState<Status | 'all'>('all');
   const [search, setSearch]       = useState('');
   const [sortField, setSortField] = useState<keyof Campaign>('spend');
   const [sortDir, setSortDir]     = useState<'asc' | 'desc'>('desc');
+
+  useEffect(() => { setIsDemo(isDemoClient()); }, []);
 
   const displayed = useMemo(() => {
     let list = activeTab === 'all' ? CAMPAIGNS : CAMPAIGNS.filter(c => c.status === activeTab);
@@ -132,6 +137,10 @@ export default function CampaignsPage() {
   const totalConversions = CAMPAIGNS.reduce((s, c) => s + c.conversions, 0);
   const avgCtr           = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) + '%' : '0%';
   const roas             = 4.2;
+
+  if (!isDemo) {
+    return <EmptyMarketingState title="Sin campañas" description="Conecta al menos una plataforma de marketing para ver tus campañas reales aquí." />;
+  }
 
   const handleSort = (field: keyof Campaign) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');

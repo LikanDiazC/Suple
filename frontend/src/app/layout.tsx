@@ -3,8 +3,8 @@ import { AuthProvider } from '../application/context/auth/AuthContext';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Enterprise SaaS Platform',
-  description: 'Unified ERP, CRM, SCM, and BPMS ecosystem',
+  title: 'Suple — Plataforma Unificada de Negocios',
+  description: 'CRM, Marketing, ERP, SCM y BPMS en una sola plataforma',
 };
 
 export default function RootLayout({

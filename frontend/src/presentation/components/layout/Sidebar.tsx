@@ -46,6 +46,7 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
           { label: 'Audiencias', href: '/dashboard/marketing/audiences' },
           { label: 'Formularios',href: '/dashboard/marketing/forms' },
           { label: 'Analytics',  href: '/dashboard/marketing/analytics' },
+          { label: 'Conexiones', href: '/dashboard/marketing/connections' },
         ],
       },
       {
@@ -129,7 +130,7 @@ export default function Sidebar() {
               transition={{ duration: 0.15 }}
               className="text-lg font-bold tracking-tight text-neutral-900"
             >
-              Enterprise
+              Suple
             </motion.span>
           )}
         </AnimatePresence>
@@ -322,7 +323,7 @@ export default function Sidebar() {
                 exit={{ opacity: 0 }}
                 className="min-w-0"
               >
-                <p className="truncate text-sm font-semibold text-neutral-900">Enterprise Corp</p>
+                <p className="truncate text-sm font-semibold text-neutral-900">Suple</p>
                 <p className="truncate text-xs text-neutral-400">tnt_demo01</p>
               </motion.div>
             )}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import { tokens } from '../../presentation/theme/tokens';
+import { enableDemoMode } from '@/lib/demoMode';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,12 +18,15 @@ export default function LoginPage() {
   }, [status, router]);
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/dashboard' });
+    // prompt: 'select_account' forces Google to show the account picker
+    // every time, instead of auto-selecting the last used account.
+    signIn('google', { callbackUrl: '/dashboard' }, { prompt: 'select_account' });
   };
 
   const handleDemoMode = () => {
-    localStorage.setItem('demo_mode', 'true');
-    localStorage.setItem('demo_user', JSON.stringify({ name: 'Demo User', email: 'demo@enterprise.com' }));
+    // enableDemoMode sets both the cookie (for middleware/API routes)
+    // and localStorage (for client-side components).
+    enableDemoMode();
     window.location.href = '/dashboard';
   };
 
@@ -33,8 +37,8 @@ export default function LoginPage() {
         style={{ background: `linear-gradient(135deg, ${tokens.colors.primary[900]} 0%, ${tokens.colors.primary[700]} 100%)` }}
       >
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Enterprise</h2>
-          <p className="text-sm text-primary-200 mt-1">Unified Business Platform</p>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Suple</h2>
+          <p className="text-sm text-primary-200 mt-1">Plataforma Unificada de Negocios</p>
         </div>
 
         <div>

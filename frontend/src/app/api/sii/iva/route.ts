@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
 
 // ---------------------------------------------------------------------------
 // Internal: fetch facturas from the sibling route
@@ -33,19 +34,23 @@ async function fetchFacturas(
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
-    const siiSession = request.cookies.get('sii_session')?.value;
-    const nextAuthToken = await getToken({ req: request });
-
-    if (!siiSession && !nextAuthToken) {
-      return NextResponse.json(
-        { error: 'Not authenticated. Please log in via SII or the app.' },
-        { status: 401, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-
     const { searchParams } = request.nextUrl;
     const periodo = searchParams.get('periodo');
+
+    // ── Demo mode → the facturas sibling route will also return mocks,
+    //    so we just need to skip our own auth check. ────────────────────
+    if (!isDemoRequest(request)) {
+      // Authenticated mode — require real auth
+      const siiSession = request.cookies.get('sii_session')?.value;
+      const nextAuthToken = await getToken({ req: request });
+
+      if (!siiSession && !nextAuthToken) {
+        return NextResponse.json(
+          { error: 'Not authenticated. Please log in via SII or the app.' },
+          { status: 401, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+    }
 
     // Forward cookies to the internal facturas request
     const cookieHeader = request.headers.get('cookie') ?? '';

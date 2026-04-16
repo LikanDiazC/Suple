@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../../presentation/animations/variants';
+import { isDemoClient } from '../../../../lib/demoMode';
+import EmptyMarketingState from '../../../../presentation/components/marketing/EmptyMarketingState';
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -120,7 +122,14 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('es-CL', { day
 // ---------------------------------------------------------------------------
 
 export default function AudiencesPage() {
+  const [isDemo, setIsDemo] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<AudienceSource | 'all'>('all');
+
+  useEffect(() => { setIsDemo(isDemoClient()); }, []);
+
+  if (!isDemo) {
+    return <EmptyMarketingState title="Sin audiencias" description="Conecta al menos una plataforma de marketing para gestionar y sincronizar tus audiencias." />;
+  }
 
   const displayed = sourceFilter === 'all'
     ? AUDIENCES

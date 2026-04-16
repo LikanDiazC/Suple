@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../../presentation/animations/variants';
 import { useCurrency } from '../../../../application/context/currency/CurrencyContext';
+import { isDemoClient } from '../../../../lib/demoMode';
+import EmptyMarketingState from '../../../../presentation/components/marketing/EmptyMarketingState';
 
 // ---------------------------------------------------------------------------
 // Data
@@ -84,8 +86,15 @@ const fmtN = (n: number) => new Intl.NumberFormat('es-CL').format(n);
 
 export default function AnalyticsPage() {
   const { fmt: fmtMoney, code: currCode } = useCurrency();
+  const [isDemo, setIsDemo] = useState(true);
   const [attribution, setAttribution] = useState<Attribution>('data_driven');
   const [dateRange, setDateRange]     = useState('30 días');
+
+  useEffect(() => { setIsDemo(isDemoClient()); }, []);
+
+  if (!isDemo) {
+    return <EmptyMarketingState title="Sin datos de analytics" description="Conecta al menos una plataforma de marketing para ver métricas de atribución y performance reales." />;
+  }
 
   const channels = CHANNEL_PERF[attribution];
   const maxConv  = Math.max(...channels.map(c => c.conversions));

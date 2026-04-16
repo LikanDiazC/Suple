@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDemoRequest } from '@/lib/demoMode';
 
 /**
  * Shared API route proxy helper.
@@ -6,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server';
  * Eliminates the 40+ duplicate boilerplate blocks that each API route
  * repeats: BACKEND_URL resolution, x-tenant-id header, useMock() check,
  * try/catch with mock fallback, and console.error logging.
+ *
+ * Demo mode: when the `demo_mode` cookie is present the proxy always
+ * returns the mock data — no backend call is ever made.
  *
  * Usage in a route.ts:
  *
@@ -29,6 +33,13 @@ function useMock(): boolean {
   return !BACKEND_URL;
 }
 
+/** Returns true when the request should use mock data (demo mode OR no backend). */
+function shouldMock(req?: NextRequest): boolean {
+  if (useMock()) return true;
+  if (req && isDemoRequest(req)) return true;
+  return false;
+}
+
 // ── GET proxy ────────────────────────────────────────────────────────────────
 
 /**
@@ -47,7 +58,7 @@ export function proxyGet<T>(
   },
 ) {
   return async function GET(req: NextRequest): Promise<NextResponse> {
-    if (useMock()) {
+    if (shouldMock(req)) {
       return NextResponse.json(mockData);
     }
 
@@ -93,7 +104,7 @@ export function proxyPost<T>(
   return async function POST(req: NextRequest): Promise<NextResponse> {
     const body = await req.json().catch(() => ({}));
 
-    if (useMock()) {
+    if (shouldMock(req)) {
       return NextResponse.json(mockData, { status: options?.mockStatus ?? 200 });
     }
 
@@ -129,8 +140,9 @@ export async function proxyDynamicGet<T>(
   backendUrl: string,
   mockData: T,
   tag = 'proxy',
+  req?: NextRequest,
 ): Promise<NextResponse> {
-  if (useMock()) {
+  if (shouldMock(req)) {
     return NextResponse.json(mockData);
   }
 
@@ -156,8 +168,9 @@ export async function proxyDynamicPost<T>(
   body: unknown,
   mockData: T,
   tag = 'proxy',
+  req?: NextRequest,
 ): Promise<NextResponse> {
-  if (useMock()) {
+  if (shouldMock(req)) {
     return NextResponse.json(mockData);
   }
 
@@ -178,4 +191,4 @@ export async function proxyDynamicPost<T>(
 
 // ── Re-exports for convenience ───────────────────────────────────────────────
 
-export { BACKEND_URL, useMock, backendHeaders };
+export { BACKEND_URL, useMock, shouldMock, backendHeaders };

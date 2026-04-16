@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { DEMO_INBOX, DEMO_STARRED, type DemoEmail } from '@/lib/demoData';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,12 +41,29 @@ export interface EmailContextValue {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert our DemoEmail shape to the GmailMessage shape used by UI. */
+function toDemoMessages(emails: DemoEmail[]): GmailMessage[] {
+  return emails.map((e) => ({
+    ...e,
+    snippet: e.snippet,
+    labelIds: undefined,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Context
 // ---------------------------------------------------------------------------
 
 const EmailCtx = createContext<EmailContextValue | null>(null);
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
+  const { isDemoMode } = useAuth();
+  const isDemoRef = useRef(isDemoMode);
+  isDemoRef.current = isDemoMode;
+
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState<ComposeData>({ to: '', subject: '', body: '' });
   const [inbox, setInbox] = useState<GmailMessage[]>([]);
@@ -65,14 +84,20 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     setComposeData((prev) => ({ ...prev, ...data }));
   }, []);
 
+  // ── Fetch inbox ─────────────────────────────────────────────────────────
   const fetchInbox = useCallback(async () => {
     setIsLoadingInbox(true);
+
+    // Demo mode: use static demo data, no API call.
+    if (isDemoRef.current) {
+      setInbox(toDemoMessages(DEMO_INBOX));
+      setIsLoadingInbox(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/gmail');
-      if (res.status === 401) {
-        setInbox([]);
-        return;
-      }
+      if (res.status === 401) { setInbox([]); return; }
       if (!res.ok) throw new Error(`Failed to fetch inbox: ${res.status}`);
       const data = await res.json();
       setInbox(Array.isArray(data) ? data : data.messages ?? []);
@@ -84,19 +109,21 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // ── Fetch starred ───────────────────────────────────────────────────────
   const fetchStarred = useCallback(async () => {
+    // Demo mode: use static demo data, no API call.
+    if (isDemoRef.current) {
+      setStarred(toDemoMessages(DEMO_STARRED));
+      return;
+    }
+
     try {
       const res = await fetch('/api/gmail/starred');
-      if (res.status === 401) {
-        setStarred([]);
-        return;
-      }
+      if (res.status === 401) { setStarred([]); return; }
       if (!res.ok) throw new Error(`Failed to fetch starred: ${res.status}`);
       const data = await res.json();
-      // Handle: array | { messages: [] } | { emails: [] }
       setStarred(
-        Array.isArray(data) ? data
-          : data.messages ?? data.emails ?? [],
+        Array.isArray(data) ? data : data.messages ?? data.emails ?? [],
       );
     } catch (err) {
       console.error('[EmailContext] fetchStarred error:', err);
@@ -104,7 +131,14 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // ── Send email ──────────────────────────────────────────────────────────
   const sendEmail = useCallback(async (data: ComposeData & { from: string }) => {
+    // Demo mode: simulate a successful send without calling the API.
+    if (isDemoRef.current) {
+      console.info('[EmailContext] Demo mode — email send simulated.', data.to);
+      return;
+    }
+
     const res = await fetch('/api/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,6 +150,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     fetchInbox();
     fetchStarred();

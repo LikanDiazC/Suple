@@ -12,5 +12,6 @@ export async function POST(
     body,
     { success: true, taskId: id, claimedBy: body.claimedBy ?? 'user' },
     'BPMS',
+    req,
   );
 }

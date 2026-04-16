@@ -2,14 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { google } from 'googleapis';
 import { getOAuth2Client } from '@/lib/google';
+import { isDemoRequest } from '@/lib/demoMode';
 
 /**
  * POST /api/gmail/send
  * Sends an email via the Gmail API.
+ * In demo mode simulates a successful send.
  * Body: { to: string, subject: string, body: string, from: string }
  */
 export async function POST(req: NextRequest) {
   try {
+    // Demo mode → simulate successful send without calling Gmail API.
+    if (isDemoRequest(req)) {
+      return NextResponse.json(
+        { success: true, messageId: `demo-${Date.now()}`, threadId: null },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
     if (!token?.accessToken || token.error === 'RefreshAccessTokenError') {

@@ -1,14 +1,23 @@
 import { google } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { isDemoRequest } from '@/lib/demoMode';
+import { DEMO_STARRED } from '@/lib/demoData';
 
 /**
  * GET /api/gmail/starred
  * Fetches up to 10 starred messages.
- * Returns an array of GmailMessage objects (same format as /api/gmail).
+ * In demo mode returns static demo starred emails.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Demo mode → return demo starred immediately, no Google API call.
+  if (isDemoRequest(req)) {
+    return NextResponse.json(DEMO_STARRED, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.accessToken) {

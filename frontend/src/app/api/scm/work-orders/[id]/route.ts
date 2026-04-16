@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
 import type { WorkOrder } from '@/types/scm';
 
 // ---------------------------------------------------------------------------
@@ -130,8 +131,10 @@ const MOCK_COMPLETED: WorkOrder = {
 const BACKEND_URL = process.env.BACKEND_URL ?? '';
 const TENANT_HEADER = { 'x-tenant-id': 'tnt_demo01' };
 
-function useMock(): boolean {
-  return !BACKEND_URL;
+function useMockLocal(req?: NextRequest): boolean {
+  if (!BACKEND_URL) return true;
+  if (req && isDemoRequest(req)) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +147,7 @@ export async function GET(
 ): Promise<NextResponse> {
   const { id } = await params;
 
-  if (useMock()) {
+  if (useMockLocal(req)) {
     const workOrder = id === 'wo-mock-completed' ? MOCK_COMPLETED : MOCK_PENDING;
     return NextResponse.json(workOrder);
   }

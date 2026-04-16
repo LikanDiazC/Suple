@@ -45,7 +45,7 @@ const INITIAL_DEALS: Deal[] = [
     notes: 'Cliente interesado en módulo de RRHH y Finanzas. Reunión agendada para el 20 de mayo.',
   },
   {
-    id: 'd2', name: 'Licencia Enterprise — Fracttal',
+    id: 'd2', name: 'Licencia Suple — Fracttal',
     company: 'Fracttal', companyColor: 'bg-emerald-500',
     value: 8400000, probability: 60, stage: 'propuesta',
     owner: 'SG', ownerColor: 'from-emerald-400 to-teal-600',
@@ -101,7 +101,7 @@ const INITIAL_DEALS: Deal[] = [
     closeDate: '2026-04-05', source: 'Upsell',
   },
   {
-    id: 'd10', name: 'Demo Enterprise — Falabella',
+    id: 'd10', name: 'Demo Suple — Falabella',
     company: 'Falabella', companyColor: 'bg-green-700',
     value: 35000000, probability: 15, stage: 'prospecto',
     owner: 'LT', ownerColor: 'from-amber-400 to-orange-600',

@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { pageTransition, staggerContainer, staggerItem } from '../../../../presentation/animations/variants';
+import { isDemoClient } from '../../../../lib/demoMode';
+import EmptyMarketingState from '../../../../presentation/components/marketing/EmptyMarketingState';
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -35,7 +37,7 @@ const ADS: Ad[] = [
   { id: 'ad5',  name: 'Video Fracttal — Demo en vivo',         campaignId: 'cmp2', campaignName: 'Remarketing Fracttal',          channel: 'meta',     type: 'video',    status: 'active',    spend: 840,  impressions: 40200,  clicks: 1206, conversions: 17, gradient: 'from-cyan-400 to-cyan-600' },
   { id: 'ad6',  name: 'Search — "software CMMS Chile"',        campaignId: 'cmp3', campaignName: 'Google Search — ICI Ingeniería',channel: 'google',   type: 'image',    status: 'active',    spend: 1200, impressions: 24000,  clicks: 2160, conversions: 45, gradient: 'from-amber-400 to-orange-500' },
   { id: 'ad7',  name: 'Search — "automatización industrial"',  campaignId: 'cmp3', campaignName: 'Google Search — ICI Ingeniería',channel: 'google',   type: 'image',    status: 'active',    spend: 900,  impressions: 18000,  clicks: 1620, conversions: 27, gradient: 'from-red-400 to-red-600' },
-  { id: 'ad8',  name: 'Sponsored — Enterprise Software',       campaignId: 'cmp4', campaignName: 'LinkedIn B2B Enterprise',       channel: 'linkedin', type: 'image',    status: 'paused',    spend: 1650, impressions: 28000,  clicks: 840,  conversions: 12, gradient: 'from-blue-600 to-indigo-700' },
+  { id: 'ad8',  name: 'Sponsored — Suple Software',       campaignId: 'cmp4', campaignName: 'LinkedIn B2B Suple',       channel: 'linkedin', type: 'image',    status: 'paused',    spend: 1650, impressions: 28000,  clicks: 840,  conversions: 12, gradient: 'from-blue-600 to-indigo-700' },
   { id: 'ad9',  name: 'TikTok — Brand Story 30s',             campaignId: 'cmp5', campaignName: 'TikTok Brand Awareness',        channel: 'tiktok',   type: 'story',    status: 'active',    spend: 540,  impressions: 248000, clicks: 4960, conversions: 18, gradient: 'from-neutral-800 to-neutral-900' },
   { id: 'ad10', name: 'TikTok — Duet Challenge',              campaignId: 'cmp5', campaignName: 'TikTok Brand Awareness',        channel: 'tiktok',   type: 'video',    status: 'in_review', spend: 350,  impressions: 172000, clicks: 3440, conversions: 10, gradient: 'from-fuchsia-400 to-purple-600' },
 ];
@@ -74,14 +76,21 @@ const CAMPAIGNS_LIST = [...new Set(ADS.map(a => a.campaignId))].map(id => ({
 // ---------------------------------------------------------------------------
 
 export default function AdsPage() {
+  const [isDemo, setIsDemo] = useState(true);
   const [campaignFilter, setCampaignFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter]     = useState<AdStatus | 'all'>('all');
+
+  useEffect(() => { setIsDemo(isDemoClient()); }, []);
 
   const displayed = useMemo(() => ADS.filter(a => {
     const byCampaign = campaignFilter === 'all' || a.campaignId === campaignFilter;
     const byStatus   = statusFilter   === 'all' || a.status     === statusFilter;
     return byCampaign && byStatus;
   }), [campaignFilter, statusFilter]);
+
+  if (!isDemo) {
+    return <EmptyMarketingState title="Sin anuncios" description="Conecta al menos una plataforma de marketing para ver tus anuncios reales aquí." />;
+  }
 
   return (
     <motion.div variants={pageTransition} initial="initial" animate="animate" className="p-6">

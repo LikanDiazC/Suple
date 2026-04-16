@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { proxyDynamicGet, proxyDynamicPost, useMock, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
+import { proxyDynamicGet, proxyDynamicPost, shouldMock, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
 import type { ProcessDefinition } from '@/types/bpms';
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
-  return proxyDynamicGet(`/api/bpms/definitions/${id}`, mockFallback(id), 'BPMS');
+  return proxyDynamicGet(`/api/bpms/definitions/${id}`, mockFallback(id), 'BPMS', _req);
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ export async function PUT(
   const { id } = await params;
   const body = await req.json();
 
-  if (useMock()) {
+  if (shouldMock(req)) {
     return NextResponse.json({ ...mockFallback(id), ...body, id, updatedAt: new Date().toISOString() });
   }
 

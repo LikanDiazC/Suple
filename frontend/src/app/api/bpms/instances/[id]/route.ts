@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyDynamicGet, proxyDynamicPost, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
+import { isDemoRequest } from '@/lib/demoMode';
 import type { ProcessInstance } from '@/types/bpms';
 
 // ---------------------------------------------------------------------------
@@ -43,7 +44,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
-  return proxyDynamicGet(`/api/bpms/instances/${id}`, mockFallback(id), 'BPMS');
+  return proxyDynamicGet(`/api/bpms/instances/${id}`, mockFallback(id), 'BPMS', _req);
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
-  if (BACKEND_URL) {
+  if (BACKEND_URL && !isDemoRequest(_req)) {
     try {
       const url = new URL(_req.url);
       const res = await fetch(`${BACKEND_URL}${url.pathname}`, {

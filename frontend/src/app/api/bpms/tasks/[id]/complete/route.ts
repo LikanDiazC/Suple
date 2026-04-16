@@ -12,5 +12,6 @@ export async function POST(
     body,
     { success: true, outcome: body.outcome ?? null },
     'BPMS',
+    req,
   );
 }

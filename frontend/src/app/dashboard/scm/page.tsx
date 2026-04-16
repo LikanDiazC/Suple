@@ -25,7 +25,7 @@ interface InventoryItem {
 const MOCK_INVENTORY: InventoryItem[] = [
   { sku: 'SKU-001', name: 'Server Rack Unit A',   stock: 245,  reorderPoint: 80,  dailyDemand: 5.2,  daysOfSupply: 47, turnover: 8.4,  risk: 'LOW' },
   { sku: 'SKU-002', name: 'Network Switch 48P',   stock: 38,   reorderPoint: 45,  dailyDemand: 3.1,  daysOfSupply: 12, turnover: 11.2, risk: 'HIGH' },
-  { sku: 'SKU-003', name: 'SSD 2TB Enterprise',   stock: 512,  reorderPoint: 200, dailyDemand: 8.7,  daysOfSupply: 59, turnover: 6.1,  risk: 'LOW' },
+  { sku: 'SKU-003', name: 'SSD 2TB Pro',   stock: 512,  reorderPoint: 200, dailyDemand: 8.7,  daysOfSupply: 59, turnover: 6.1,  risk: 'LOW' },
   { sku: 'SKU-004', name: 'UPS Battery Module',   stock: 15,   reorderPoint: 30,  dailyDemand: 2.4,  daysOfSupply: 6,  turnover: 14.8, risk: 'CRITICAL' },
   { sku: 'SKU-005', name: 'Cat6a Cable Spool',    stock: 89,   reorderPoint: 60,  dailyDemand: 4.5,  daysOfSupply: 20, turnover: 9.3,  risk: 'MODERATE' },
   { sku: 'SKU-006', name: 'Fiber Patch Panel',    stock: 167,  reorderPoint: 50,  dailyDemand: 2.8,  daysOfSupply: 60, turnover: 5.6,  risk: 'LOW' },

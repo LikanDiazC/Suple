@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { useMock, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
+import { shouldMock, BACKEND_URL, backendHeaders } from '@/lib/apiProxy';
 import type { Task } from '@/types/bpms';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const limit = parseInt(searchParams.get('limit') ?? '20', 10);
 
-  if (useMock()) {
+  if (shouldMock(req)) {
     let tasks = [...MOCK_TASKS];
 
     if (status) {

@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { google } from 'googleapis';
 import { getOAuth2Client } from '@/lib/google';
+import { isDemoRequest } from '@/lib/demoMode';
+import { DEMO_INBOX } from '@/lib/demoData';
 
 /**
  * GET /api/gmail
  * Fetches the 20 most recent inbox messages with metadata.
+ * In demo mode returns static demo emails.
  */
 export async function GET(req: NextRequest) {
   try {
+    // Demo mode → return demo inbox immediately, no Google API call.
+    if (isDemoRequest(req)) {
+      return NextResponse.json(DEMO_INBOX, {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
     // Treat missing token OR failed token refresh as unauthenticated

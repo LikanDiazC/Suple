@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
+import { prisma } from '@/lib/prisma';
+import { decrypt } from '@/lib/encryption';
+import { getMarketingService } from '@/application/services/marketing';
 
 const MOCK_DATA = {
   campaigns: 2,
@@ -9,13 +14,60 @@ const MOCK_DATA = {
   mock: true,
 };
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  // Demo mode → return mock data immediately
+  if (isDemoRequest(request)) {
+    return NextResponse.json(MOCK_DATA);
+  }
+
   try {
+    // ── 1) Try DB-stored connection (OAuth multi-tenant) ─────────────────
+    const session = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (session?.email) {
+      const user = await prisma.user.findUnique({ where: { email: session.email } });
+      if (user) {
+        const conn = await prisma.marketingConnection.findFirst({
+          where: { userId: user.id, platform: 'GOOGLE_ADS', status: 'ACTIVE' },
+        });
+
+        if (conn) {
+          const accessToken = decrypt(conn.encryptedAccessToken);
+          const service = getMarketingService('GOOGLE_ADS');
+          const adAccountId = conn.adAccountId ?? '';
+
+          try {
+            const campaigns = await service.getCampaigns(accessToken, adAccountId);
+            const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
+            const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
+            const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0);
+            const totalConversions = campaigns.reduce((s, c) => s + c.conversions, 0);
+
+            return NextResponse.json(
+              {
+                campaigns: campaigns.length,
+                spend: totalSpend,
+                impressions: totalImpressions,
+                clicks: totalClicks,
+                conversions: totalConversions,
+                mock: false,
+                details: campaigns,
+              },
+              { headers: { 'Cache-Control': 'no-store' } },
+            );
+          } catch (err) {
+            // Token might be expired — mark and fall through
+            const msg = err instanceof Error ? err.message : 'Unknown';
+            console.warn(`[Google Ads] DB token failed: ${msg}`);
+          }
+        }
+      }
+    }
+
+    // ── 2) Fallback: env-var tokens (legacy single-tenant) ───────────────
     const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
     const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
 
     if (developerToken && customerId) {
-      // Google Ads API v16 — Campaign performance query
       const query = `
         SELECT
           campaign.name,
@@ -48,10 +100,7 @@ export async function GET(_request: NextRequest) {
         const errorBody = await res.text();
         return NextResponse.json(
           { error: 'Google Ads API request failed', detail: errorBody },
-          {
-            status: res.status,
-            headers: { 'Cache-Control': 'no-store' },
-          },
+          { status: res.status, headers: { 'Cache-Control': 'no-store' } },
         );
       }
 
@@ -85,13 +134,12 @@ export async function GET(_request: NextRequest) {
       );
     }
 
-    // No credentials configured — return mock data
+    // ── 3) No credentials → mock data ────────────────────────────────────
     return NextResponse.json(MOCK_DATA, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Internal server error', detail: message },
       { status: 500, headers: { 'Cache-Control': 'no-store' } },

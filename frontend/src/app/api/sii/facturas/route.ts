@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
 
 // ---------------------------------------------------------------------------
 // Mock data — mirrors the SII dashboard page frontend data
@@ -46,7 +47,27 @@ const MOCK_RECIBIDAS: Factura[] = [
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication — either SII session cookie or NextAuth JWT
+    const { searchParams } = request.nextUrl;
+    const tipo = searchParams.get('tipo') ?? 'emitidas';
+    const periodo = searchParams.get('periodo'); // e.g. '2026-04'
+
+    // ── Demo mode → return mock data immediately, no auth required ─────
+    if (isDemoRequest(request)) {
+      if (tipo !== 'emitidas' && tipo !== 'recibidas') {
+        return NextResponse.json(
+          { error: 'Invalid tipo. Must be "emitidas" or "recibidas".' },
+          { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      let facturas = tipo === 'emitidas' ? MOCK_EMITIDAS : MOCK_RECIBIDAS;
+      if (periodo) facturas = facturas.filter((f) => f.fecha.startsWith(periodo));
+      return NextResponse.json(
+        { facturas, tipo, periodo: periodo ?? 'current', mock: true },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    // ── Authenticated mode — require real auth ─────────────────────────
     const siiSession = request.cookies.get('sii_session')?.value;
     const nextAuthToken = await getToken({ req: request });
 
@@ -56,10 +77,6 @@ export async function GET(request: NextRequest) {
         { status: 401, headers: { 'Cache-Control': 'no-store' } },
       );
     }
-
-    const { searchParams } = request.nextUrl;
-    const tipo = searchParams.get('tipo') ?? 'emitidas';
-    const periodo = searchParams.get('periodo'); // e.g. '2026-04'
 
     if (tipo !== 'emitidas' && tipo !== 'recibidas') {
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isDemoRequest } from '@/lib/demoMode';
 import type { Board, Offcut, InventoryResponse } from '@/types/scm';
 
 // ---------------------------------------------------------------------------
@@ -98,8 +99,10 @@ const MOCK_OFFCUTS: Offcut[] = [
 const BACKEND_URL = process.env.BACKEND_URL ?? '';
 const TENANT_HEADER = { 'x-tenant-id': 'tnt_demo01' };
 
-function useMock(): boolean {
-  return !BACKEND_URL;
+function useMockLocal(req?: NextRequest): boolean {
+  if (!BACKEND_URL) return true;
+  if (req && isDemoRequest(req)) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = req.nextUrl;
   const materialSku = searchParams.get('materialSku') ?? '';
 
-  if (useMock()) {
+  if (useMockLocal(req)) {
     let boards = MOCK_BOARDS;
     let offcuts = MOCK_OFFCUTS;
 
