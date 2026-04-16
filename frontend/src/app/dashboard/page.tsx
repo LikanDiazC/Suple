@@ -25,7 +25,9 @@ function getGreeting(): string {
   return 'Buenas noches';
 }
 function getDateStr(): string {
-  return new Intl.DateTimeFormat('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date());
+  const formatted = new Intl.DateTimeFormat('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date());
+  // Capitalize only the first letter (weekday) — leave "de" in lowercase per Spanish grammar.
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +304,7 @@ export default function DashboardPage() {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-primary-100 capitalize">{dateStr}</p>
+            <p className="text-sm font-medium text-primary-100">{dateStr}</p>
             <h1 className="mt-1 text-2xl font-bold">{greeting}, {userName}</h1>
             <p className="mt-1 text-sm text-primary-200">
               Tienes <span className="font-bold text-white">2 facturas pendientes</span> y{' '}
@@ -327,7 +329,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25 }}
           >
-            <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-4 gap-5">
+            <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
               <KpiMini label="Pipeline total"   value={`${fmtShort(107200000)}`} delta="14.2%" positive icon={<IconPipeline />} />
               <KpiMini label="Ingreso mensual"  value={`${fmtShort(31200000)}`}  delta="7.9%"  positive icon={<IconRevenue />} />
               <KpiMini label="Campañas activas" value="4"                         delta="1 nueva" positive icon={<IconCampaigns />} />
@@ -344,12 +346,12 @@ export default function DashboardPage() {
             key="charts"
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25 }}
-            className={`grid gap-6 ${has('revenue-chart') && has('pipeline-chart') ? 'grid-cols-5' : 'grid-cols-1'}`}
+            className={`grid gap-4 sm:gap-6 ${has('revenue-chart') && has('pipeline-chart') ? 'grid-cols-1 xl:grid-cols-5' : 'grid-cols-1'}`}
           >
             {has('revenue-chart') && (
               <motion.div
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                className={`${has('pipeline-chart') ? 'col-span-3' : 'col-span-1'} rounded-xl border border-neutral-200 bg-white p-6 shadow-sm`}
+                className={`${has('pipeline-chart') ? 'xl:col-span-3' : 'col-span-1'} rounded-xl border border-neutral-200 bg-white p-6 shadow-sm`}
               >
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -390,7 +392,7 @@ export default function DashboardPage() {
             {has('pipeline-chart') && (
               <motion.div
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-                className={`${has('revenue-chart') ? 'col-span-2' : 'col-span-1'} rounded-xl border border-neutral-200 bg-white p-6 shadow-sm`}
+                className={`${has('revenue-chart') ? 'xl:col-span-2' : 'col-span-1'} rounded-xl border border-neutral-200 bg-white p-6 shadow-sm`}
               >
                 <p className="text-sm font-bold text-neutral-800 mb-1">Pipeline — Evolución</p>
                 <p className="text-xs text-neutral-400 mb-6">Valor acumulado por semana</p>
@@ -531,7 +533,7 @@ export default function DashboardPage() {
                   </div>
                   <Link href="/dashboard/sii" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ir a SII</Link>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   {SII_ALERTS.map((item, i) => (
                     <div key={i} className="rounded-lg bg-neutral-50 p-3">
                       <p className="text-[11px] text-neutral-500 mb-1">{item.label}</p>
@@ -604,7 +606,7 @@ export default function DashboardPage() {
                   </div>
                   <Link href="/dashboard/scm/inventory" className="text-[11px] font-semibold text-primary-600 hover:text-primary-700">Ver inventario</Link>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   {[
                     { label: 'Planchas disponibles', value: MOCK_SCM.availableBoards, color: 'text-green-700' },
                     { label: 'Retazos disponibles',  value: MOCK_SCM.availableOffcuts, color: 'text-green-700' },

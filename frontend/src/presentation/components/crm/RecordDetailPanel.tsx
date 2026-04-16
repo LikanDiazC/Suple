@@ -98,12 +98,12 @@ export default function RecordDetailPanel() {
   // Properties to display
   const props = [
     ...(email ? [{ label: 'Correo', value: email, type: 'email' }] : []),
-    ...(phone ? [{ label: 'Telefono', value: phone, type: 'text' }] : []),
+    ...(phone ? [{ label: 'Teléfono', value: phone, type: 'text' }] : []),
     ...(domain ? [{ label: 'Dominio', value: domain, type: 'url' }] : []),
     ...(city ? [{ label: 'Ciudad', value: city, type: 'text' }] : []),
     ...(leadStatus ? [{ label: 'Estado del lead', value: leadStatus, type: 'enum' }] : []),
-    { label: 'Fecha de creacion', value: formatDate(createDate), type: 'text' },
-    { label: 'Ultima actividad', value: formatDate(lastActivity), type: 'text' },
+    { label: 'Fecha de creación', value: formatDate(createDate), type: 'text' },
+    { label: 'Última actividad', value: formatDate(lastActivity), type: 'text' },
   ];
 
   return (
@@ -226,7 +226,7 @@ export default function RecordDetailPanel() {
                   {isMine ? `Quitar de mis ${objectLabel}` : `Agregar a mis ${objectLabel}`}
                 </span>
                 <p className="text-xs opacity-60 mt-0.5">
-                  {isMine ? 'Ya no aparecera en tu vista personalizada' : `Aparecera en la pestaña "Mis ${objectLabel}"`}
+                  {isMine ? 'Ya no aparecerá en tu vista personalizada' : `Aparecerá en la pestaña "Mis ${objectLabel}"`}
                 </p>
               </div>
             </button>
@@ -243,7 +243,7 @@ export default function RecordDetailPanel() {
               </div>
               <div className="text-left">
                 <span className="font-medium">Analizar</span>
-                <p className="text-xs opacity-60 mt-0.5">Analisis avanzado con IA</p>
+                <p className="text-xs opacity-60 mt-0.5">Análisis avanzado con IA</p>
               </div>
             </button>
           </div>

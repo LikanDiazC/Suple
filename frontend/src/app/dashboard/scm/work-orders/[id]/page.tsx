@@ -430,7 +430,7 @@ export default function WorkOrderDetailPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* ── Header row ── */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -455,11 +455,19 @@ export default function WorkOrderDetailPage() {
           </button>
 
           {/* Order ID */}
-          {workOrder && (
-            <span className="font-mono text-sm font-semibold text-neutral-700 tracking-wide">
-              #{workOrder.id.slice(-8).toUpperCase()}
-            </span>
-          )}
+          {workOrder && (() => {
+            // Extract trailing digit-group so seed IDs like `wo_pending_007`
+            // render as `#0007` instead of `NDING_007`.
+            const match = workOrder.id.match(/(\d+)$/);
+            const displayId = match
+              ? String(parseInt(match[1], 10)).padStart(4, '0')
+              : workOrder.id.slice(-8).toUpperCase();
+            return (
+              <span className="font-mono text-sm font-semibold text-neutral-700 tracking-wide">
+                #{displayId}
+              </span>
+            );
+          })()}
 
           {/* Status badge */}
           {workOrder && <StatusBadge status={workOrder.status} />}

@@ -828,7 +828,7 @@ export default function SiiPage() {
 
             {/* KPI summary */}
             <motion.div variants={staggerContainer} initial="initial" animate="animate"
-              className="grid grid-cols-4 gap-4"
+              className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
             >
               {(() => {
                 const resumen = calcIvaResumen(emitidas, recibidas);

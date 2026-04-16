@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tooltipVariants } from '../../animations/variants';
 import { useAuth } from '../../../application/context/auth/AuthContext';
+import { useMobileMenu } from '../../../application/context/mobile-menu/MobileMenuContext';
 
 interface TopBarProps {
   title: string;
@@ -13,9 +14,10 @@ interface TopBarProps {
 export default function TopBar({ title, subtitle }: TopBarProps) {
   const [showProfile, setShowProfile] = useState(false);
   const { user, signOut } = useAuth();
+  const { open: openMobileMenu } = useMobileMenu();
 
   const displayName = user?.name || 'Admin User';
-  const displayEmail = user?.email || 'admin@enterprise.com';
+  const displayEmail = user?.email || 'admin@suple.cl';
   const nameParts = displayName.split(' ').filter(Boolean);
   const initials = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
@@ -23,12 +25,24 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
   const userImage = user?.image || null;
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-neutral-200 bg-white/80 px-8 backdrop-blur-md">
-      <div>
-        <h1 className="text-lg font-bold text-neutral-900 tracking-tight">{title}</h1>
-        {subtitle && (
-          <p className="text-xs text-neutral-400">{subtitle}</p>
-        )}
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-neutral-200 bg-white/80 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* Mobile hamburger (hidden at lg+) */}
+        <button
+          onClick={openMobileMenu}
+          className="lg:hidden rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors"
+          aria-label="Abrir menú"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M3 5h14M3 10h14M3 15h14" />
+          </svg>
+        </button>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-bold text-neutral-900 tracking-tight">{title}</h1>
+          {subtitle && (
+            <p className="truncate text-xs text-neutral-400">{subtitle}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -36,7 +50,7 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
         <div className="relative hidden md:block">
           <input
             type="text"
-            placeholder="Search modules, contacts, entries..."
+            placeholder="Buscar módulos, contactos, entradas..."
             className="h-9 w-72 rounded-lg border border-neutral-200 bg-neutral-50 pl-9 pr-4 text-sm text-neutral-700 placeholder-neutral-400 outline-none transition-all focus:border-primary-400 focus:bg-white focus:ring-2 focus:ring-primary-100"
           />
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -89,13 +103,13 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
                   <p className="mt-1 text-[10px] font-medium text-primary-600">Tenant: tnt_demo01</p>
                 </div>
                 <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50">
-                  <span>Profile Settings</span>
+                  <span>Preferencias de cuenta</span>
                 </button>
                 <button
                   onClick={() => signOut({ callbackUrl: '/' })}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger-600 hover:bg-danger-50"
                 >
-                  <span>Sign Out</span>
+                  <span>Cerrar sesión</span>
                 </button>
               </motion.div>
             )}

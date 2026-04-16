@@ -7,6 +7,8 @@ import { pageTransition, staggerContainer, staggerItem } from '../../../presenta
 import { tokens } from '../../../presentation/theme/tokens';
 import { useCurrency } from '../../../application/context/currency/CurrencyContext';
 
+type EntryStatus = 'Posted' | 'Draft' | 'Reversed';
+
 interface JournalEntry {
   id: string;
   entryNumber: string;
@@ -15,17 +17,23 @@ interface JournalEntry {
   source: string;
   debit: number;
   credit: number;
-  status: 'Posted' | 'Draft' | 'Reversed';
+  status: EntryStatus;
 }
 
+const STATUS_LABEL: Record<EntryStatus, string> = {
+  Posted:   'Contabilizado',
+  Draft:    'Borrador',
+  Reversed: 'Reversado',
+};
+
 const MOCK_ENTRIES: JournalEntry[] = [
-  { id: '1', entryNumber: 'JE-2026-001', date: '2026-04-12', description: 'Revenue Recognition - Q1 Services',      source: 'AR_INVOICE',       debit: 284750, credit: 284750, status: 'Posted' },
-  { id: '2', entryNumber: 'JE-2026-002', date: '2026-04-11', description: 'Vendor Payment - Globex Supply Co.',     source: 'AP_INVOICE',       debit: 47200,  credit: 47200,  status: 'Posted' },
-  { id: '3', entryNumber: 'JE-2026-003', date: '2026-04-11', description: 'Monthly Payroll - April 2026',           source: 'PAYROLL',          debit: 156800, credit: 156800, status: 'Posted' },
-  { id: '4', entryNumber: 'JE-2026-004', date: '2026-04-10', description: 'Equipment Depreciation - Data Center',   source: 'ASSET_DEPRECIATION',debit: 12400, credit: 12400,  status: 'Posted' },
-  { id: '5', entryNumber: 'JE-2026-005', date: '2026-04-10', description: 'Inventory Valuation Adjustment',         source: 'INVENTORY',        debit: 8300,   credit: 8300,   status: 'Draft' },
-  { id: '6', entryNumber: 'JE-2026-006', date: '2026-04-09', description: 'Bank Reconciliation - Main Operating',   source: 'BANK_RECON',       debit: 523000, credit: 523000, status: 'Posted' },
-  { id: '7', entryNumber: 'JE-2026-007', date: '2026-04-08', description: 'Intercompany Transfer - EU Division',    source: 'INTERCOMPANY',     debit: 91500,  credit: 91500,  status: 'Reversed' },
+  { id: '1', entryNumber: 'JE-2026-001', date: '2026-04-12', description: 'Reconocimiento de ingresos — Servicios Q1',    source: 'FACTURA_CXC',     debit: 284750, credit: 284750, status: 'Posted' },
+  { id: '2', entryNumber: 'JE-2026-002', date: '2026-04-11', description: 'Pago a proveedor — Globex Supply Co.',         source: 'FACTURA_CXP',     debit: 47200,  credit: 47200,  status: 'Posted' },
+  { id: '3', entryNumber: 'JE-2026-003', date: '2026-04-11', description: 'Nómina mensual — Abril 2026',                  source: 'NOMINA',          debit: 156800, credit: 156800, status: 'Posted' },
+  { id: '4', entryNumber: 'JE-2026-004', date: '2026-04-10', description: 'Depreciación de equipos — Data Center',        source: 'DEPRECIACION',    debit: 12400,  credit: 12400,  status: 'Posted' },
+  { id: '5', entryNumber: 'JE-2026-005', date: '2026-04-10', description: 'Ajuste de valorización de inventario',         source: 'INVENTARIO',      debit: 8300,   credit: 8300,   status: 'Draft' },
+  { id: '6', entryNumber: 'JE-2026-006', date: '2026-04-09', description: 'Conciliación bancaria — Cuenta operativa',     source: 'CONCILIACION',    debit: 523000, credit: 523000, status: 'Posted' },
+  { id: '7', entryNumber: 'JE-2026-007', date: '2026-04-08', description: 'Transferencia intercompañía — División UE',    source: 'INTERCOMPANIA',   debit: 91500,  credit: 91500,  status: 'Reversed' },
 ];
 
 export default function ERPPage() {
@@ -39,15 +47,15 @@ export default function ERPPage() {
 
   return (
     <>
-      <TopBar title="ERP" subtitle="Universal Journal - Single Source of Truth" />
-      <motion.div variants={pageTransition} initial="initial" animate="animate" className="p-8">
+      <TopBar title="ERP" subtitle="Asientos contables — Fuente única de verdad" />
+      <motion.div variants={pageTransition} initial="initial" animate="animate" className="p-4 sm:p-6 lg:p-8">
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
           {[
-            { label: 'Total Debits', value: fmt(totalDebit), color: tokens.colors.info.base },
-            { label: 'Total Credits', value: fmt(totalCredit), color: tokens.colors.success.base },
-            { label: 'Balance', value: fmt(totalDebit - totalCredit), color: totalDebit === totalCredit ? tokens.colors.success.base : tokens.colors.danger.base },
+            { label: 'Total debe',  value: fmt(totalDebit),               color: tokens.colors.info.base },
+            { label: 'Total haber', value: fmt(totalCredit),              color: tokens.colors.success.base },
+            { label: 'Balance',     value: fmt(totalDebit - totalCredit), color: totalDebit === totalCredit ? tokens.colors.success.base : tokens.colors.danger.base },
           ].map((card, i) => (
             <motion.div
               key={card.label}
@@ -75,23 +83,23 @@ export default function ERPPage() {
                   : 'bg-white text-neutral-500 border border-neutral-200 hover:bg-neutral-50'
               }`}
             >
-              {f === 'all' ? 'All Entries' : f}
+              {f === 'all' ? 'Todos los asientos' : STATUS_LABEL[f]}
             </button>
           ))}
         </div>
 
         {/* Journal Table */}
-        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-          <table className="w-full">
+        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-x-auto">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50">
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Entry</th>
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Date</th>
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Description</th>
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Source</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Debit</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Credit</th>
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Status</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Asiento</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Fecha</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Descripción</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Origen</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Debe</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Haber</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -111,7 +119,7 @@ export default function ERPPage() {
                       entry.status === 'Draft' ? 'bg-amber-50 text-amber-700' :
                       'bg-red-50 text-red-700'
                     }`}>
-                      {entry.status}
+                      {STATUS_LABEL[entry.status]}
                     </span>
                   </td>
                 </motion.tr>
@@ -119,12 +127,12 @@ export default function ERPPage() {
             </tbody>
             <tfoot>
               <tr className="bg-neutral-50 font-semibold">
-                <td colSpan={4} className="px-6 py-3 text-sm text-neutral-700">Totals</td>
+                <td colSpan={4} className="px-6 py-3 text-sm text-neutral-700">Totales</td>
                 <td className="px-6 py-3 text-right text-sm font-mono text-neutral-900">{fmt(totalDebit)} <span className="text-[0.65em] font-normal text-neutral-400">{currCode}</span></td>
                 <td className="px-6 py-3 text-right text-sm font-mono text-neutral-900">{fmt(totalCredit)} <span className="text-[0.65em] font-normal text-neutral-400">{currCode}</span></td>
                 <td className="px-6 py-3">
                   <span className={`text-xs font-bold ${totalDebit === totalCredit ? 'text-green-600' : 'text-red-600'}`}>
-                    {totalDebit === totalCredit ? 'BALANCED' : 'UNBALANCED'}
+                    {totalDebit === totalCredit ? 'CUADRADO' : 'DESCUADRADO'}
                   </span>
                 </td>
               </tr>

@@ -20,6 +20,15 @@ import { INSTANCE_STATUS_STYLES as STATUS_STYLES } from '../../../../lib/statusC
 const ALL_STATUSES = ['Todos', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'ERROR'] as const;
 type StatusFilter = typeof ALL_STATUSES[number];
 
+/** Spanish filter-tab labels. Keeps the wire-level enum intact. */
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  Todos:      'Todos',
+  ACTIVE:     'Activas',
+  COMPLETED:  'Completadas',
+  CANCELLED:  'Canceladas',
+  ERROR:      'Con error',
+};
+
 function progressPercent(instance: ProcessInstance): number {
   const total = instance.completedNodeIds.length + instance.activeNodeIds.length;
   if (total === 0) return 0;
@@ -291,7 +300,7 @@ export default function MonitorPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* KPI row */}
         <motion.div
@@ -320,7 +329,7 @@ export default function MonitorPage() {
                       : 'text-neutral-500 hover:text-neutral-700'
                   }`}
                 >
-                  {s === 'Todos' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
+                  {STATUS_FILTER_LABEL[s]}
                   <span className={`inline-flex items-center justify-center rounded-full min-w-[18px] px-1 text-[10px] font-bold ${
                     statusFilter === s ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-600'
                   }`}>
@@ -352,7 +361,7 @@ export default function MonitorPage() {
               className="flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50 py-20 text-center"
             >
               <span className="text-4xl">📡</span>
-              <p className="mt-3 text-sm font-medium text-neutral-500">No hay instancias{statusFilter !== 'Todos' ? ` con estado ${statusFilter}` : ''}</p>
+              <p className="mt-3 text-sm font-medium text-neutral-500">No hay instancias{statusFilter !== 'Todos' ? ` ${STATUS_FILTER_LABEL[statusFilter].toLowerCase()}` : ''}</p>
               <p className="mt-1 text-xs text-neutral-400">El monitor se actualiza automáticamente cada 15 segundos.</p>
             </motion.div>
           </AnimatePresence>

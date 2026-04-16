@@ -23,13 +23,20 @@ interface InventoryItem {
 }
 
 const MOCK_INVENTORY: InventoryItem[] = [
-  { sku: 'SKU-001', name: 'Server Rack Unit A',   stock: 245,  reorderPoint: 80,  dailyDemand: 5.2,  daysOfSupply: 47, turnover: 8.4,  risk: 'LOW' },
-  { sku: 'SKU-002', name: 'Network Switch 48P',   stock: 38,   reorderPoint: 45,  dailyDemand: 3.1,  daysOfSupply: 12, turnover: 11.2, risk: 'HIGH' },
-  { sku: 'SKU-003', name: 'SSD 2TB Pro',   stock: 512,  reorderPoint: 200, dailyDemand: 8.7,  daysOfSupply: 59, turnover: 6.1,  risk: 'LOW' },
-  { sku: 'SKU-004', name: 'UPS Battery Module',   stock: 15,   reorderPoint: 30,  dailyDemand: 2.4,  daysOfSupply: 6,  turnover: 14.8, risk: 'CRITICAL' },
-  { sku: 'SKU-005', name: 'Cat6a Cable Spool',    stock: 89,   reorderPoint: 60,  dailyDemand: 4.5,  daysOfSupply: 20, turnover: 9.3,  risk: 'MODERATE' },
-  { sku: 'SKU-006', name: 'Fiber Patch Panel',    stock: 167,  reorderPoint: 50,  dailyDemand: 2.8,  daysOfSupply: 60, turnover: 5.6,  risk: 'LOW' },
+  { sku: 'SKU-001', name: 'Rack para servidor A',    stock: 245,  reorderPoint: 80,  dailyDemand: 5.2,  daysOfSupply: 47, turnover: 8.4,  risk: 'LOW' },
+  { sku: 'SKU-002', name: 'Switch de red 48P',       stock: 38,   reorderPoint: 45,  dailyDemand: 3.1,  daysOfSupply: 12, turnover: 11.2, risk: 'HIGH' },
+  { sku: 'SKU-003', name: 'SSD 2TB Pro',             stock: 512,  reorderPoint: 200, dailyDemand: 8.7,  daysOfSupply: 59, turnover: 6.1,  risk: 'LOW' },
+  { sku: 'SKU-004', name: 'Módulo batería UPS',      stock: 15,   reorderPoint: 30,  dailyDemand: 2.4,  daysOfSupply: 6,  turnover: 14.8, risk: 'CRITICAL' },
+  { sku: 'SKU-005', name: 'Rollo cable Cat6a',       stock: 89,   reorderPoint: 60,  dailyDemand: 4.5,  daysOfSupply: 20, turnover: 9.3,  risk: 'MODERATE' },
+  { sku: 'SKU-006', name: 'Panel fibra óptica',      stock: 167,  reorderPoint: 50,  dailyDemand: 2.8,  daysOfSupply: 60, turnover: 5.6,  risk: 'LOW' },
 ];
+
+const RISK_LABEL: Record<InventoryItem['risk'], string> = {
+  LOW:      'Bajo',
+  MODERATE: 'Moderado',
+  HIGH:     'Alto',
+  CRITICAL: 'Crítico',
+};
 
 interface WhatIfState {
   demandMultiplier: number;
@@ -218,13 +225,13 @@ export default function SCMPage() {
     {
       label: 'Planchas disponibles',
       value: isLoadingStats ? null : (kpiStats?.availableBoards ?? '—'),
-      sub: 'Stock AVAILABLE',
+      sub: 'Stock disponible',
       color: 'bg-primary-500',
     },
     {
       label: 'Retazos disponibles',
       value: isLoadingStats ? null : (kpiStats?.availableOffcuts ?? '—'),
-      sub: 'Stock AVAILABLE',
+      sub: 'Stock disponible',
       color: 'bg-green-500',
     },
     {
@@ -256,7 +263,7 @@ export default function SCMPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* ── Section 1: Quick Actions ── */}
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-neutral-400">
@@ -368,7 +375,7 @@ export default function SCMPage() {
 
         {/* ── Section 3: What-If Simulator (preserved) ── */}
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Simulador What-If
+          Simulador de escenarios
         </h2>
 
         <motion.div
@@ -378,12 +385,12 @@ export default function SCMPage() {
           className="mb-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm"
         >
           <h3 className="text-sm font-semibold text-neutral-800 mb-4">
-            What-If Scenario Simulator
+            Simulador de escenarios ¿Qué pasaría si?
           </h3>
           <div className="grid grid-cols-2 gap-8">
             <div>
               <label className="block text-xs font-medium text-neutral-500 mb-2">
-                Demand Multiplier:{' '}
+                Multiplicador de demanda:{' '}
                 <span className="font-bold text-neutral-800">
                   {whatIf.demandMultiplier.toFixed(1)}x
                 </span>
@@ -392,7 +399,7 @@ export default function SCMPage() {
                     className="ml-2"
                     style={{ color: tokens.colors.warning.dark }}
                   >
-                    (+{((whatIf.demandMultiplier - 1) * 100).toFixed(0)}% demand increase)
+                    (+{((whatIf.demandMultiplier - 1) * 100).toFixed(0)}% de aumento de demanda)
                   </span>
                 )}
               </label>
@@ -409,15 +416,15 @@ export default function SCMPage() {
               />
               <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
                 <span>0.5x</span>
-                <span>1.0x (baseline)</span>
+                <span>1.0x (base)</span>
                 <span>3.0x</span>
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-500 mb-2">
-                Supplier Lead Time:{' '}
+                Plazo de entrega del proveedor:{' '}
                 <span className="font-bold text-neutral-800">
-                  {whatIf.leadTimeDays} days
+                  {whatIf.leadTimeDays} días
                 </span>
               </label>
               <input
@@ -432,9 +439,9 @@ export default function SCMPage() {
                 className="w-full accent-primary-500"
               />
               <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
-                <span>3 days</span>
-                <span>30 days</span>
-                <span>60 days</span>
+                <span>3 días</span>
+                <span>30 días</span>
+                <span>60 días</span>
               </div>
             </div>
           </div>
@@ -445,19 +452,19 @@ export default function SCMPage() {
           variants={staggerContainer}
           initial="initial"
           animate="animate"
-          className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden"
+          className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-x-auto"
         >
-          <table className="w-full">
+          <table className="w-full min-w-[820px]">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50">
                 <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">SKU</th>
-                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Product</th>
+                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Producto</th>
                 <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Stock</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Daily Demand</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Days of Supply</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Turnover</th>
-                <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Risk</th>
-                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Rec. Order Qty</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Demanda diaria</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Días de stock</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Rotación</th>
+                <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Riesgo</th>
+                <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Cant. sugerida</th>
               </tr>
             </thead>
             <tbody>
@@ -487,7 +494,7 @@ export default function SCMPage() {
                       {item.stock.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-mono text-neutral-600">
-                      {sim.adjustedDemand}/day
+                      {sim.adjustedDemand}/día
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span
@@ -505,7 +512,7 @@ export default function SCMPage() {
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${rc.bg} ${rc.text}`}
                       >
-                        {simRisk}
+                        {RISK_LABEL[simRisk]}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-mono font-semibold text-neutral-800">

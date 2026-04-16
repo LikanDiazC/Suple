@@ -293,7 +293,7 @@ function Step2({
           >
             <div className="mb-4 rounded-lg border border-primary-200 bg-primary-50/40 p-4">
               <p className="mb-3 text-xs font-semibold text-primary-700">Nueva pieza</p>
-              <div className="grid grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
                 {/* Label */}
                 <div className="col-span-2">
                   <label className="mb-1 block text-[11px] font-medium text-neutral-500">Etiqueta (opcional)</label>
@@ -380,8 +380,8 @@ function Step2({
 
       {/* Table */}
       {requirements.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-neutral-200">
-          <table className="w-full">
+        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50">
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Etiqueta</th>
@@ -497,7 +497,7 @@ function Step3({
       <p className="mb-6 text-xs text-neutral-400">Confirma los datos antes de enviar al motor de optimización.</p>
 
       {/* Summary card */}
-      <div className="mb-5 rounded-lg border border-neutral-100 bg-neutral-50 px-5 py-4 grid grid-cols-3 gap-4">
+      <div className="mb-5 rounded-lg border border-neutral-100 bg-neutral-50 px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Material</p>
           <p className="mt-1 text-sm font-semibold text-neutral-800">{materialSku}</p>
@@ -513,8 +513,8 @@ function Step3({
       </div>
 
       {/* Requirements table */}
-      <div className="overflow-hidden rounded-lg border border-neutral-200">
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-lg border border-neutral-200">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="border-b border-neutral-100 bg-neutral-50">
               <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Etiqueta</th>
@@ -603,6 +603,13 @@ function Step3({
 // ---------------------------------------------------------------------------
 
 function SuccessState({ orderId, onNavigate }: { orderId: string; onNavigate: () => void }) {
+  // Extract trailing digit-group from the order ID (e.g. "wo_pending_042" → "0042").
+  // Falls back to the last 8 chars if the API returns an opaque ID.
+  const match = orderId.match(/(\d+)$/);
+  const displayId = match
+    ? String(parseInt(match[1], 10)).padStart(4, '0')
+    : orderId.slice(-8).toUpperCase();
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
@@ -620,7 +627,7 @@ function SuccessState({ orderId, onNavigate }: { orderId: string; onNavigate: ()
       <h3 className="text-base font-bold text-green-800">Orden creada exitosamente</h3>
       <p className="mt-1 text-xs text-green-600">
         ID:{' '}
-        <span className="font-mono font-semibold">#{orderId.slice(-8).toUpperCase()}</span>
+        <span className="font-mono font-semibold">#{displayId}</span>
       </p>
       <p className="mt-2 text-xs text-green-600">El motor de optimización procesará la orden en breve.</p>
       <button
@@ -711,7 +718,7 @@ export default function NewWorkOrderPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* Header back button */}
         <div className="mb-6">

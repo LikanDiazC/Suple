@@ -22,11 +22,11 @@ const COMPANY_COLUMNS: ColumnDef[] = [
   { key: 'name',           label: 'Nombre',               type: 'avatar',   width: '220px', sortable: true,  visible: true,  propertyType: 'TEXT' },
   { key: 'domain',         label: 'Dominio',              type: 'text',     width: '180px', sortable: true,  visible: true,  propertyType: 'URL' },
   { key: 'owner_id',       label: 'Propietario',          type: 'text',     width: '160px', sortable: true,  visible: true,  propertyType: 'TEXT' },
-  { key: 'phone',          label: 'Telefono',             type: 'text',     width: '140px', sortable: false, visible: true,  propertyType: 'PHONE' },
+  { key: 'phone',          label: 'Teléfono',             type: 'text',     width: '140px', sortable: false, visible: true,  propertyType: 'PHONE' },
   { key: 'city',           label: 'Ciudad',               type: 'text',     width: '120px', sortable: true,  visible: true,  propertyType: 'TEXT' },
   { key: 'lead_status',    label: 'Estado del lead',      type: 'enum',     width: '140px', sortable: true,  visible: false, propertyType: 'ENUM', options: COMPANY_LEAD_STATUS_OPTIONS.map((o, i) => ({ ...o, displayOrder: i })) },
-  { key: 'create_date',    label: 'Fecha de creacion',    type: 'date',     width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
-  { key: 'last_activity',  label: 'Ultima actividad',     type: 'date',     width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
+  { key: 'create_date',    label: 'Fecha de creación',    type: 'date',     width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
+  { key: 'last_activity',  label: 'Última actividad',     type: 'date',     width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -34,17 +34,17 @@ const COMPANY_COLUMNS: ColumnDef[] = [
 // ---------------------------------------------------------------------------
 
 const COMPANY_PROPERTIES = [
-  { key: 'name',            label: 'Nombre',             type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'domain',          label: 'Dominio',            type: 'URL'      as PropertyType, group: 'Informacion general' },
-  { key: 'phone',           label: 'Telefono',           type: 'PHONE'    as PropertyType, group: 'Informacion general' },
-  { key: 'city',            label: 'Ciudad',             type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'industry',        label: 'Industria',          type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'employee_count',  label: 'Num. empleados',     type: 'NUMBER'   as PropertyType, group: 'Informacion general' },
-  { key: 'annual_revenue',  label: 'Ingresos anuales',   type: 'CURRENCY' as PropertyType, group: 'Informacion general' },
-  { key: 'lead_status',     label: 'Estado del lead',    type: 'ENUM'     as PropertyType, group: 'Informacion general', options: COMPANY_LEAD_STATUS_OPTIONS },
+  { key: 'name',            label: 'Nombre',             type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'domain',          label: 'Dominio',            type: 'URL'      as PropertyType, group: 'Información general' },
+  { key: 'phone',           label: 'Teléfono',           type: 'PHONE'    as PropertyType, group: 'Información general' },
+  { key: 'city',            label: 'Ciudad',             type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'industry',        label: 'Industria',          type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'employee_count',  label: 'N° empleados',       type: 'NUMBER'   as PropertyType, group: 'Información general' },
+  { key: 'annual_revenue',  label: 'Ingresos anuales',   type: 'CURRENCY' as PropertyType, group: 'Información general' },
+  { key: 'lead_status',     label: 'Estado del lead',    type: 'ENUM'     as PropertyType, group: 'Información general', options: COMPANY_LEAD_STATUS_OPTIONS },
   { key: 'owner_id',        label: 'Propietario',        type: 'TEXT'     as PropertyType, group: 'Sistema' },
-  { key: 'create_date',     label: 'Fecha de creacion',  type: 'DATETIME' as PropertyType, group: 'Sistema' },
-  { key: 'last_activity',   label: 'Ultima actividad',   type: 'DATETIME' as PropertyType, group: 'Actividad' },
+  { key: 'create_date',     label: 'Fecha de creación',  type: 'DATETIME' as PropertyType, group: 'Sistema' },
+  { key: 'last_activity',   label: 'Última actividad',   type: 'DATETIME' as PropertyType, group: 'Actividad' },
 ];
 
 const TABS = [
@@ -80,7 +80,7 @@ export default function CompaniesPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <input
                   placeholder="Nombre de la empresa"
                   value={formData.name}

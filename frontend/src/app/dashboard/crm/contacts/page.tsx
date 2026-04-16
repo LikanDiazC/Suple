@@ -23,13 +23,13 @@ const LEAD_STATUS_OPTIONS = [
 
 const CONTACT_COLUMNS: ColumnDef[] = [
   { key: 'first_name',          label: 'Nombre',               type: 'avatar', width: '220px', sortable: true,  visible: true,  propertyType: 'TEXT' },
-  { key: 'email',               label: 'Correo electronico',   type: 'email',  width: '220px', sortable: true,  visible: true,  propertyType: 'EMAIL' },
-  { key: 'phone',               label: 'Telefono',             type: 'text',   width: '140px', sortable: false, visible: true,  propertyType: 'PHONE' },
+  { key: 'email',               label: 'Correo electrónico',   type: 'email',  width: '220px', sortable: true,  visible: true,  propertyType: 'EMAIL' },
+  { key: 'phone',               label: 'Teléfono',             type: 'text',   width: '140px', sortable: false, visible: true,  propertyType: 'PHONE' },
   { key: 'lead_status',         label: 'Estado del lead',      type: 'enum',   width: '140px', sortable: true,  visible: true,  propertyType: 'ENUM', options: LEAD_STATUS_OPTIONS.map((o, i) => ({ ...o, displayOrder: i })) },
   { key: 'content_topics',      label: 'Temas de contenido',   type: 'text',   width: '160px', sortable: false, visible: false, propertyType: 'TEXT' },
   { key: 'preferred_channels',  label: 'Canales preferidos',   type: 'text',   width: '160px', sortable: false, visible: false, propertyType: 'TEXT' },
-  { key: 'create_date',         label: 'Fecha de creacion',    type: 'date',   width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
-  { key: 'last_activity',       label: 'Ultima actividad',     type: 'date',   width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
+  { key: 'create_date',         label: 'Fecha de creación',    type: 'date',   width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
+  { key: 'last_activity',       label: 'Última actividad',     type: 'date',   width: '180px', sortable: true,  visible: true,  propertyType: 'DATETIME' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -37,16 +37,16 @@ const CONTACT_COLUMNS: ColumnDef[] = [
 // ---------------------------------------------------------------------------
 
 const CONTACT_PROPERTIES = [
-  { key: 'first_name',         label: 'Nombre',              type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'last_name',          label: 'Apellido',            type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'email',              label: 'Correo electronico',  type: 'EMAIL'    as PropertyType, group: 'Informacion general' },
-  { key: 'phone',              label: 'Telefono',            type: 'PHONE'    as PropertyType, group: 'Informacion general' },
-  { key: 'company',            label: 'Empresa',             type: 'TEXT'     as PropertyType, group: 'Informacion general' },
-  { key: 'lead_status',        label: 'Estado del lead',     type: 'ENUM'     as PropertyType, group: 'Informacion general', options: LEAD_STATUS_OPTIONS },
-  { key: 'content_topics',     label: 'Temas de contenido',  type: 'TEXT'     as PropertyType, group: 'Conversion' },
-  { key: 'preferred_channels', label: 'Canales preferidos',  type: 'TEXT'     as PropertyType, group: 'Conversion' },
-  { key: 'create_date',        label: 'Fecha de creacion',   type: 'DATETIME' as PropertyType, group: 'Sistema' },
-  { key: 'last_activity',      label: 'Ultima actividad',    type: 'DATETIME' as PropertyType, group: 'Actividad' },
+  { key: 'first_name',         label: 'Nombre',              type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'last_name',          label: 'Apellido',            type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'email',              label: 'Correo electrónico',  type: 'EMAIL'    as PropertyType, group: 'Información general' },
+  { key: 'phone',              label: 'Teléfono',            type: 'PHONE'    as PropertyType, group: 'Información general' },
+  { key: 'company',            label: 'Empresa',             type: 'TEXT'     as PropertyType, group: 'Información general' },
+  { key: 'lead_status',        label: 'Estado del lead',     type: 'ENUM'     as PropertyType, group: 'Información general', options: LEAD_STATUS_OPTIONS },
+  { key: 'content_topics',     label: 'Temas de contenido',  type: 'TEXT'     as PropertyType, group: 'Conversión' },
+  { key: 'preferred_channels', label: 'Canales preferidos',  type: 'TEXT'     as PropertyType, group: 'Conversión' },
+  { key: 'create_date',        label: 'Fecha de creación',   type: 'DATETIME' as PropertyType, group: 'Sistema' },
+  { key: 'last_activity',      label: 'Última actividad',    type: 'DATETIME' as PropertyType, group: 'Actividad' },
   { key: 'owner_id',           label: 'Propietario',         type: 'TEXT'     as PropertyType, group: 'Sistema' },
 ];
 
@@ -132,7 +132,7 @@ export default function ContactsPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-5 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
                 <input
                   placeholder="Nombre"
                   value={formData.firstName}

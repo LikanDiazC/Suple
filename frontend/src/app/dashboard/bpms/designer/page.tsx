@@ -93,7 +93,7 @@ function UserTaskNode({ data, selected }: { data: any; selected?: boolean }) {
       <div style={{ background: '#1d4ed8', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
         <svg width="11" height="11" viewBox="0 0 16 16" fill="white"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-5 6a5 5 0 0 1 10 0H3z" /></svg>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
-          {data.name || 'User Task'}
+          {data.name || 'Tarea de usuario'}
         </span>
       </div>
       <div style={{ padding: '5px 8px 6px' }}>
@@ -129,7 +129,7 @@ function ServiceTaskNode({ data, selected }: { data: any; selected?: boolean }) 
       <div style={{ background: '#7e22ce', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
         <svg width="11" height="11" viewBox="0 0 16 16" fill="white"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" /><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm0-1A7 7 0 1 1 8 1a7 7 0 0 1 0 14z" /></svg>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
-          {data.name || 'Service Task'}
+          {data.name || 'Tarea de servicio'}
         </span>
       </div>
       <div style={{ padding: '5px 8px 6px' }}>
@@ -201,14 +201,28 @@ const ASSIGNEE_ROLES = [
 const SERVICE_TYPES = ['SCM_OPTIMIZE', 'SEND_EMAIL', 'WEBHOOK'];
 
 const PALETTE_ITEMS = [
-  { type: 'START_EVENT',        label: 'Start Event',         color: '#22c55e', shape: 'circle' },
-  { type: 'END_EVENT',          label: 'End Event',           color: '#f97316', shape: 'circle' },
-  { type: 'USER_TASK',          label: 'User Task',           color: '#1d4ed8', shape: 'rect' },
-  { type: 'SERVICE_TASK',       label: 'Service Task',        color: '#7e22ce', shape: 'rect' },
-  { type: 'EXCLUSIVE_GATEWAY',  label: 'Exclusive Gateway',   color: '#fde047', shape: 'diamond' },
-  { type: 'PARALLEL_GATEWAY',   label: 'Parallel Gateway',    color: '#60a5fa', shape: 'diamond' },
-  { type: 'INCLUSIVE_GATEWAY',  label: 'Inclusive Gateway',   color: '#2dd4bf', shape: 'diamond' },
+  { type: 'START_EVENT',        label: 'Evento de inicio',    color: '#22c55e', shape: 'circle' },
+  { type: 'END_EVENT',          label: 'Evento de fin',       color: '#f97316', shape: 'circle' },
+  { type: 'USER_TASK',          label: 'Tarea de usuario',    color: '#1d4ed8', shape: 'rect' },
+  { type: 'SERVICE_TASK',       label: 'Tarea de servicio',   color: '#7e22ce', shape: 'rect' },
+  { type: 'EXCLUSIVE_GATEWAY',  label: 'Gateway exclusivo',   color: '#fde047', shape: 'diamond' },
+  { type: 'PARALLEL_GATEWAY',   label: 'Gateway paralelo',    color: '#60a5fa', shape: 'diamond' },
+  { type: 'INCLUSIVE_GATEWAY',  label: 'Gateway inclusivo',   color: '#2dd4bf', shape: 'diamond' },
 ];
+
+/**
+ * Human-readable node-type labels shown in the config panel.
+ * Keeps the discriminator internal while showing Spanish copy to the user.
+ */
+const NODE_TYPE_LABEL: Record<string, string> = {
+  START_EVENT:        'Evento de inicio',
+  END_EVENT:          'Evento de fin',
+  USER_TASK:          'Tarea de usuario',
+  SERVICE_TASK:       'Tarea de servicio',
+  EXCLUSIVE_GATEWAY:  'Gateway exclusivo',
+  PARALLEL_GATEWAY:   'Gateway paralelo',
+  INCLUSIVE_GATEWAY:  'Gateway inclusivo',
+};
 
 function getDefaultName(type: string): string {
   const map: Record<string, string> = {
@@ -303,7 +317,7 @@ function NodeConfigPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
-        <span className="text-sm font-semibold text-neutral-800">Configurar Nodo</span>
+        <span className="text-sm font-semibold text-neutral-800">Configurar nodo</span>
         <button onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
@@ -315,7 +329,7 @@ function NodeConfigPanel({
         {/* Type badge */}
         <div>
           <span className="inline-block rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-semibold text-neutral-600">
-            {nodeType?.replace(/_/g, ' ')}
+            {NODE_TYPE_LABEL[nodeType] ?? nodeType?.replace(/_/g, ' ')}
           </span>
         </div>
 
@@ -334,7 +348,7 @@ function NodeConfigPanel({
         {nodeType === 'USER_TASK' && (
           <>
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-neutral-600">Rol Asignado</label>
+              <label className="block text-xs font-semibold text-neutral-600">Rol asignado</label>
               <select
                 value={config.assigneeRole ?? ''}
                 onChange={(e) => updateConfig('assigneeRole', e.target.value)}
@@ -354,7 +368,7 @@ function NodeConfigPanel({
                 value={config.slaHours ?? ''}
                 onChange={(e) => updateConfig('slaHours', e.target.value ? Number(e.target.value) : undefined)}
                 className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-                placeholder="e.g. 24"
+                placeholder="ej. 24"
               />
             </div>
           </>
@@ -379,7 +393,7 @@ function NodeConfigPanel({
 
         {/* Approval Outcomes */}
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-neutral-600">Resultados de Aprobacion</label>
+          <label className="block text-xs font-semibold text-neutral-600">Resultados de aprobación</label>
           <div className="flex gap-2">
             <input
               value={outcomeInput}
@@ -407,14 +421,14 @@ function NodeConfigPanel({
 
         {/* Description */}
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-neutral-600">Descripcion</label>
+          <label className="block text-xs font-semibold text-neutral-600">Descripción</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={() => commit({ description })}
             rows={3}
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all resize-none"
-            placeholder="Descripcion del nodo..."
+            placeholder="Descripción del nodo..."
           />
         </div>
       </div>
@@ -732,7 +746,7 @@ function DesignerInner() {
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-neutral-400">Arrastra elementos desde la barra lateral</p>
-                <p className="text-xs text-neutral-300">Conecta nodos arrastrando desde los puntos de conexion</p>
+                <p className="text-xs text-neutral-300">Conecta nodos arrastrando desde los puntos de conexión</p>
               </div>
             )}
           </ReactFlow>

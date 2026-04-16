@@ -130,7 +130,7 @@ export default function FormsPage() {
     <motion.div variants={pageTransition} initial="initial" animate="animate" className="p-6">
 
       {/* Summary bar */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Total leads capturados', value: fmtN(totalLeads) },
           { label: 'Total vistas',            value: fmtN(totalViews) },

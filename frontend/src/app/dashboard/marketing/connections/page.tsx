@@ -399,12 +399,12 @@ function ConnectionsContent() {
 
       {/* How it works */}
       <div className="rounded-xl bg-neutral-50 border border-neutral-200 p-5">
-        <h2 className="text-sm font-semibold text-neutral-800 mb-3">Como funciona</h2>
+        <h2 className="text-sm font-semibold text-neutral-800 mb-3">Cómo funciona</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { step: '1', title: 'Conectar', desc: 'Autoriza Suple en tu cuenta publicitaria con OAuth seguro.' },
-            { step: '2', title: 'Sincronizar', desc: 'Campanas, gastos y conversiones se importan automaticamente.' },
-            { step: '3', title: 'Tracking', desc: 'Envia eventos de conversion (CAPI) a todas las plataformas a la vez.' },
+            { step: '2', title: 'Sincronizar', desc: 'Campañas, gastos y conversiones se importan automáticamente.' },
+            { step: '3', title: 'Tracking', desc: 'Envía eventos de conversión (CAPI) a todas las plataformas a la vez.' },
           ].map((item) => (
             <div key={item.step} className="flex items-start gap-3">
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-500 text-[10px] font-bold text-white">

@@ -273,7 +273,7 @@ export default function InstanceDetailPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* Header row */}
         <div className="mb-8 flex flex-wrap items-center gap-4">

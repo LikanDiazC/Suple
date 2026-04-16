@@ -23,11 +23,11 @@ function minutesAgo(m: number): string {
 }
 
 export const DEMO_INBOX: DemoEmail[] = [
-  { id: 'demo-1', from: 'Cencosud Retail', fromEmail: 'compras@cencosud.cl', subject: 'Confirmacion OC #4892 — Aprobada', snippet: 'Estimados, confirmamos la aprobacion de la orden de compra...', date: minutesAgo(25), isUnread: true, isStarred: true },
-  { id: 'demo-2', from: 'UDLA Universidad', fromEmail: 'proyectos@udla.cl', subject: 'Re: Propuesta modulo SCM Q2 2026', snippet: 'Hemos revisado la propuesta y tenemos algunas consultas...', date: minutesAgo(60), isUnread: true, isStarred: true },
+  { id: 'demo-1', from: 'Cencosud Retail', fromEmail: 'compras@cencosud.cl', subject: 'Confirmación OC #4892 — Aprobada', snippet: 'Estimados, confirmamos la aprobación de la orden de compra...', date: minutesAgo(25), isUnread: true, isStarred: true },
+  { id: 'demo-2', from: 'UDLA Universidad', fromEmail: 'proyectos@udla.cl', subject: 'Re: Propuesta módulo SCM Q2 2026', snippet: 'Hemos revisado la propuesta y tenemos algunas consultas...', date: minutesAgo(60), isUnread: true, isStarred: true },
   { id: 'demo-3', from: 'Fracttal SpA', fromEmail: 'pagos@fracttal.com', subject: 'Factura #1002 — Pago recibido', snippet: 'Le informamos que hemos recibido su pago correctamente...', date: minutesAgo(120), isUnread: false, isStarred: true },
-  { id: 'demo-4', from: 'Banco Estado', fromEmail: 'notificaciones@bancoestado.cl', subject: 'Notificacion transferencia recibida', snippet: 'Se ha registrado una transferencia en su cuenta...', date: minutesAgo(180), isUnread: false, isStarred: false },
-  { id: 'demo-5', from: 'Sodimac S.A.', fromEmail: 'despacho@sodimac.cl', subject: 'Actualizacion estado pedido #7712', snippet: 'Su pedido ha sido despachado y esta en camino...', date: minutesAgo(1440), isUnread: false, isStarred: false },
+  { id: 'demo-4', from: 'Banco Estado', fromEmail: 'notificaciones@bancoestado.cl', subject: 'Notificación transferencia recibida', snippet: 'Se ha registrado una transferencia en su cuenta...', date: minutesAgo(180), isUnread: false, isStarred: false },
+  { id: 'demo-5', from: 'Sodimac S.A.', fromEmail: 'despacho@sodimac.cl', subject: 'Actualización estado pedido #7712', snippet: 'Su pedido ha sido despachado y está en camino...', date: minutesAgo(1440), isUnread: false, isStarred: false },
 ];
 
 export const DEMO_STARRED: DemoEmail[] = DEMO_INBOX.filter((e) => e.isStarred);

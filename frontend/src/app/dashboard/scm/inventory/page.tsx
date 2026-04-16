@@ -330,7 +330,7 @@ export default function InventoryPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
         // Shift content left when panel is open so it doesn't sit under the panel
         style={{
           paddingRight: selectedItem ? 'calc(380px + 2rem)' : undefined,

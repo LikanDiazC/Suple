@@ -18,6 +18,18 @@ import type { ProcessDefinition, ProcessDefinitionStatus } from '../../../../typ
 const CATEGORIES = ['Todos', 'ventas', 'compras', 'produccion', 'general'] as const;
 type Category = typeof CATEGORIES[number];
 
+/**
+ * Display label for each category. Uses the accented Spanish form for
+ * "producción" while keeping the wire-level key `produccion` intact.
+ */
+const CATEGORY_LABEL: Record<Category, string> = {
+  Todos:      'Todos',
+  ventas:     'Ventas',
+  compras:    'Compras',
+  produccion: 'Producción',
+  general:    'General',
+};
+
 const STATUS_STYLES: Record<ProcessDefinitionStatus, string> = {
   ACTIVE:     'bg-green-50 text-green-700 ring-1 ring-green-200',
   DRAFT:      'bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200',
@@ -27,7 +39,7 @@ const STATUS_STYLES: Record<ProcessDefinitionStatus, string> = {
 const STATUS_LABELS: Record<ProcessDefinitionStatus, string> = {
   ACTIVE:     'Activo',
   DRAFT:      'Borrador',
-  DEPRECATED: 'Deprecated',
+  DEPRECATED: 'Obsoleto',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -271,7 +283,7 @@ function ProcessCard({ definition, onEdit, onStart, onPublish }: ProcessCardProp
       {/* Category + version */}
       <div className="flex items-center gap-2">
         <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[definition.category] ?? 'bg-neutral-100 text-neutral-600'}`}>
-          {definition.category}
+          {CATEGORY_LABEL[definition.category as Category] ?? definition.category}
         </span>
         <span className="font-mono text-[11px] text-neutral-400">v{definition.version}</span>
       </div>
@@ -360,7 +372,7 @@ export default function ProcessesPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* Header row */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -395,13 +407,13 @@ export default function ProcessesPage() {
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors capitalize ${
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                   category === cat
                     ? 'bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200'
                     : 'text-neutral-500 hover:text-neutral-700'
                 }`}
               >
-                {cat}
+                {CATEGORY_LABEL[cat]}
               </button>
             ))}
           </div>

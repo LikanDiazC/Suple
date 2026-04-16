@@ -47,13 +47,13 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         const u = JSON.parse(localStorage.getItem('demo_user') || '{}');
         setDemoUser({
           name: u.name || 'Demo User',
-          email: u.email || 'demo@enterprise.com',
+          email: u.email || 'demo@suple.cl',
           image: null,
         });
       } catch {
         setDemoUser({
           name: 'Demo User',
-          email: 'demo@enterprise.com',
+          email: 'demo@suple.cl',
           image: null,
         });
       }

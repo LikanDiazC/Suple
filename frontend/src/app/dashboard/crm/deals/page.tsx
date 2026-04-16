@@ -371,7 +371,7 @@ export default function DealsPage() {
       <motion.div variants={pageTransition} initial="initial" animate="animate" className="flex flex-col h-full">
         {/* Summary KPIs */}
         <div className="shrink-0 px-6 pt-5 pb-4">
-          <div className="grid grid-cols-4 gap-4 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
             {[
               { label: 'Pipeline total',    amount: totalPipeline,    sub: `${activeDealsList.length} deals activos` },
               { label: 'Pipeline ponderado',amount: weightedPipeline, sub: 'por probabilidad' },

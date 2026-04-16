@@ -14,12 +14,12 @@ import type { WorkOrder, WorkOrderStatus } from '../../../../types/scm';
 type FilterTab = 'ALL' | WorkOrderStatus;
 
 const FILTER_TABS: { label: string; value: FilterTab }[] = [
-  { label: 'Todos', value: 'ALL' },
-  { label: 'PENDING', value: 'PENDING' },
-  { label: 'OPTIMIZING', value: 'OPTIMIZING' },
-  { label: 'CUTTING', value: 'CUTTING' },
-  { label: 'COMPLETED', value: 'COMPLETED' },
-  { label: 'CANCELLED', value: 'CANCELLED' },
+  { label: 'Todas',        value: 'ALL' },
+  { label: 'Pendientes',   value: 'PENDING' },
+  { label: 'Optimizando',  value: 'OPTIMIZING' },
+  { label: 'Cortando',     value: 'CUTTING' },
+  { label: 'Completadas',  value: 'COMPLETED' },
+  { label: 'Canceladas',   value: 'CANCELLED' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ function EmptyState({ filter }: { filter: FilterTab }) {
       <p className="mt-1 text-xs text-neutral-400">
         {filter === 'ALL'
           ? 'Crea tu primera orden de trabajo con el botón "Nueva Orden".'
-          : `No se encontraron órdenes con estado ${filter}.`}
+          : `No se encontraron órdenes en este estado.`}
       </p>
     </motion.div>
   );
@@ -147,6 +147,18 @@ export default function WorkOrdersPage() {
     return `${pieces} pieza${pieces !== 1 ? 's' : ''}, ${materials} material${materials !== 1 ? 'es' : ''}`;
   };
 
+  /**
+   * Build a friendly display ID.
+   * Seed IDs look like `wo_pending_001` / `wo_completed_042`.
+   * We extract the trailing digit-group (pad to 4) and fall back to the
+   * position in the list so the UI never shows status-words like "NDING_001".
+   */
+  const displayId = (order: WorkOrder, index: number): string => {
+    const match = order.id.match(/(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : index + 1;
+    return String(n).padStart(4, '0');
+  };
+
   return (
     <>
       <TopBar
@@ -158,7 +170,7 @@ export default function WorkOrdersPage() {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="p-8"
+        className="p-4 sm:p-6 lg:p-8"
       >
         {/* Header row */}
         <div className="mb-6 flex items-center justify-between">
@@ -217,7 +229,7 @@ export default function WorkOrdersPage() {
             className="space-y-3"
           >
             <AnimatePresence mode="popLayout">
-              {orders.map((order) => {
+              {orders.map((order, index) => {
                 const efficiency = order.cuttingPlan?.totalEfficiencyPct;
                 return (
                   <motion.div
@@ -233,7 +245,7 @@ export default function WorkOrdersPage() {
 
                       {/* Order ID */}
                       <span className="font-mono text-sm font-medium text-neutral-700">
-                        #{order.id.slice(-8).toUpperCase()}
+                        #{displayId(order, index)}
                       </span>
 
                       {/* Requirements summary */}
@@ -252,8 +264,8 @@ export default function WorkOrdersPage() {
                       <div className="flex-1" />
 
                       {/* Created date */}
-                      <span className="text-xs text-neutral-400">
-                        {new Date(order.createdAt).toLocaleDateString()}
+                      <span className="text-xs text-neutral-400" suppressHydrationWarning>
+                        {new Date(order.createdAt).toLocaleDateString('es-CL')}
                       </span>
 
                       {/* Detail button */}

@@ -51,7 +51,7 @@ export default function LoginPage() {
               ERP. CRM. SCM. BPMS.
             </p>
             <p className="text-lg text-primary-200 mt-3 leading-relaxed">
-              One platform, zero silos. Real-time visibility across every business function.
+              Una plataforma, cero silos. Visibilidad en tiempo real de todas las áreas del negocio.
             </p>
           </motion.div>
 
@@ -88,8 +88,8 @@ export default function LoginPage() {
           className="w-full max-w-md"
         >
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-neutral-900">Sign in</h1>
-            <p className="text-sm text-neutral-500 mt-1">Access your enterprise workspace</p>
+            <h1 className="text-2xl font-bold text-neutral-900">Inicia sesión</h1>
+            <p className="text-sm text-neutral-500 mt-1">Accede al espacio de trabajo de tu empresa</p>
           </div>
 
           {/* SSO Buttons */}
@@ -114,7 +114,7 @@ export default function LoginPage() {
                 <circle cx="9" cy="9" r="8" fill="#007DC1"/>
                 <circle cx="9" cy="9" r="3.5" fill="white"/>
               </svg>
-              Okta SSO (Proximamente)
+              Okta SSO (Próximamente)
             </button>
             <button
               disabled
@@ -123,7 +123,7 @@ export default function LoginPage() {
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 8h6M6 11h4"/>
               </svg>
-              SAML (Proximamente)
+              SAML (Próximamente)
             </button>
           </div>
 
@@ -133,7 +133,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-neutral-200" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-4 text-neutral-400">o inicia sesion con email</span>
+              <span className="bg-white px-4 text-neutral-400">o inicia sesión con email</span>
             </div>
           </div>
 
@@ -141,7 +141,7 @@ export default function LoginPage() {
           <fieldset disabled className="space-y-4 opacity-50">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-1.5">
-                Work email
+                Correo corporativo
               </label>
               <input
                 id="email"
@@ -152,12 +152,12 @@ export default function LoginPage() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-neutral-700 mb-1.5">
-                Password
+                Contraseña
               </label>
               <input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Ingresa tu contraseña"
                 className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800 outline-none transition-all placeholder:text-neutral-400 cursor-not-allowed"
               />
             </div>
@@ -166,7 +166,7 @@ export default function LoginPage() {
               type="button"
               className="w-full rounded-xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white shadow-sm cursor-not-allowed"
             >
-              Sign in (Proximamente)
+              Iniciar sesión (Próximamente)
             </button>
           </fieldset>
 

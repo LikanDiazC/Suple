@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens } from '../../theme/tokens';
 import { sidebarVariants } from '../../animations/variants';
+import { useMobileMenu } from '../../../application/context/mobile-menu/MobileMenuContext';
 
 interface NavItem {
   label: string;
@@ -17,13 +18,13 @@ interface NavItem {
 
 const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
-    title: 'Overview',
+    title: 'General',
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: <GridIcon /> },
     ],
   },
   {
-    title: 'Modules',
+    title: 'Módulos',
     items: [
       {
         label: 'CRM',
@@ -54,10 +55,7 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
         href: '/dashboard/erp',
         icon: <LedgerIcon />,
         children: [
-          { label: 'Resumen',        href: '/dashboard/erp' },
-          { label: 'Contabilidad',   href: '/dashboard/erp/accounting' },
-          { label: 'Libro Mayor',    href: '/dashboard/erp/ledger' },
-          { label: 'Reportes',       href: '/dashboard/erp/reports' },
+          { label: 'Asientos contables', href: '/dashboard/erp' },
         ],
       },
       {
@@ -65,10 +63,10 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
         href: '/dashboard/scm',
         icon: <TruckIcon />,
         children: [
-          { label: 'Resumen',          href: '/dashboard/scm' },
-          { label: 'Inventario',       href: '/dashboard/scm/inventory' },
-          { label: 'Órdenes de Corte', href: '/dashboard/scm/work-orders' },
-          { label: 'Nueva Orden',      href: '/dashboard/scm/work-orders/new' },
+          { label: 'Panel SCM',          href: '/dashboard/scm' },
+          { label: 'Inventario',         href: '/dashboard/scm/inventory' },
+          { label: 'Órdenes de Corte',   href: '/dashboard/scm/work-orders' },
+          { label: 'Nueva Orden',        href: '/dashboard/scm/work-orders/new' },
         ],
       },
       {
@@ -76,7 +74,7 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
         href: '/dashboard/bpms',
         icon: <WorkflowIcon />,
         children: [
-          { label: 'Resumen',    href: '/dashboard/bpms' },
+          { label: 'Panel BPMS', href: '/dashboard/bpms' },
           { label: 'Procesos',   href: '/dashboard/bpms/processes' },
           { label: 'Mis Tareas', href: '/dashboard/bpms/tasks' },
           { label: 'Monitor',    href: '/dashboard/bpms/monitor' },
@@ -86,23 +84,24 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
-    title: 'Finance & Tax',
+    title: 'Impuestos y facturación',
     items: [
       { label: 'SII / Facturación', href: '/dashboard/sii', icon: <SiiIcon /> },
     ],
   },
   {
-    title: 'System',
+    title: 'Sistema',
     items: [
-      { label: 'Settings', href: '/dashboard/settings', icon: <GearIcon /> },
+      { label: 'Configuración', href: '/dashboard/settings', icon: <GearIcon /> },
     ],
   },
 ];
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['CRM', 'Marketing', 'ERP', 'SCM', 'BPMS', 'Finance & Tax']));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['CRM', 'Marketing', 'ERP', 'SCM', 'BPMS', 'Impuestos y facturación']));
   const pathname = usePathname();
+  const { isOpen: mobileOpen, close: closeMobile } = useMobileMenu();
 
   const toggleSection = (label: string) => {
     setExpandedSections((prev) => {
@@ -113,11 +112,20 @@ export default function Sidebar() {
     });
   };
 
+  // Close the mobile sidebar after navigating (UX: mirror native app drawers).
+  const handleMobileNavigate = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      closeMobile();
+    }
+  };
+
   return (
     <motion.aside
       variants={sidebarVariants}
       animate={collapsed ? 'collapsed' : 'expanded'}
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-neutral-200 bg-white"
+      className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-neutral-200 bg-white transition-transform duration-300 ${
+        mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+      } lg:translate-x-0 lg:shadow-none`}
     >
       {/* Logo Header */}
       <div className="flex h-16 items-center justify-between border-b border-neutral-200 px-4">
@@ -134,9 +142,10 @@ export default function Sidebar() {
             </motion.span>
           )}
         </AnimatePresence>
+        {/* Desktop collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+          className="hidden lg:inline-flex rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -149,6 +158,17 @@ export default function Sidebar() {
                 <path d="M3 4h12M3 9h8M3 14h12" />
               </>
             )}
+          </svg>
+        </button>
+
+        {/* Mobile close button */}
+        <button
+          onClick={closeMobile}
+          className="lg:hidden rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+          aria-label="Cerrar menú"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M4 4l10 10M14 4L4 14" />
           </svg>
         </button>
       </div>
@@ -227,6 +247,7 @@ export default function Sidebar() {
                   ) : (
                     <Link
                       href={item.href}
+                      onClick={handleMobileNavigate}
                       className={`
                         group relative mx-2 mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5
                         text-sm font-medium transition-all duration-150
@@ -284,6 +305,7 @@ export default function Sidebar() {
                               <Link
                                 key={child.href}
                                 href={child.href}
+                                onClick={handleMobileNavigate}
                                 className={`
                                   mx-2 mb-0.5 flex items-center gap-2 rounded-lg py-2 pl-10 pr-3
                                   text-[13px] transition-all duration-150

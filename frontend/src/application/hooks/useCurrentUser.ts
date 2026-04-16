@@ -9,7 +9,7 @@ export interface CurrentUser {
 }
 
 const DEMO_USER: CurrentUser = {
-  email: 'demo@enterprise.com',
+  email: 'demo@suple.cl',
   name: 'Demo User',
   initials: 'DU',
 };

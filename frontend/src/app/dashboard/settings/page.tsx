@@ -61,7 +61,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {CURRENCY_OPTIONS.map(opt => {
             const selected = currency === opt.key;
             return (

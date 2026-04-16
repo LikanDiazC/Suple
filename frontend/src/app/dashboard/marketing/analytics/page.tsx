@@ -126,7 +126,7 @@ export default function AnalyticsPage() {
       {/* Attribution Model Selector */}
       <div className="bg-white rounded-xl border border-neutral-100 shadow-sm p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-4">Modelo de atribución</p>
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {ATTRIBUTION_MODELS.map(m => (
             <button
               key={m.key}
@@ -146,10 +146,10 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Channel Performance Bar Chart */}
-        <div className="col-span-2 bg-white rounded-xl border border-neutral-100 shadow-sm p-6">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-neutral-100 shadow-sm p-6">
           <p className="text-sm font-bold text-neutral-800 mb-6">Conversiones por canal — <span className="text-neutral-400 font-normal">{ATTRIBUTION_MODELS.find(m=>m.key===attribution)?.label}</span></p>
           <div className="space-y-4">
             {channels.map(ch => {
@@ -213,7 +213,7 @@ export default function AnalyticsPage() {
           <button className="text-xs font-semibold text-primary-600 hover:text-primary-700">+ Conectar plataforma</button>
         </div>
         <motion.div variants={staggerContainer} initial="initial" animate="animate"
-          className="grid grid-cols-5 gap-4"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
         >
           {PLATFORMS.map(p => (
             <motion.div key={p.name} variants={staggerItem}

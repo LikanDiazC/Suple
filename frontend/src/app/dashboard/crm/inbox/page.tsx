@@ -272,7 +272,7 @@ function EmailRow({ email, selected, onClick }: EmailRowProps) {
           <span className={`text-sm truncate ${email.read ? 'text-neutral-700' : 'text-neutral-900 font-semibold'}`}>
             {email.from.name}
           </span>
-          <span className="text-[11px] text-neutral-400 flex-shrink-0">{formatEmailDate(email.date)}</span>
+          <span className="text-[11px] text-neutral-400 flex-shrink-0" suppressHydrationWarning>{formatEmailDate(email.date)}</span>
         </div>
         <p className={`text-[13px] truncate mt-0.5 ${email.read ? 'text-neutral-500' : 'text-neutral-800 font-medium'}`}>
           {email.subject}
@@ -321,7 +321,7 @@ function EmailDetail({ email, onReply }: EmailDetailProps) {
               <p className="text-xs text-neutral-500">{email.from.email}</p>
             </div>
           </div>
-          <span className="text-xs text-neutral-400 flex-shrink-0">
+          <span className="text-xs text-neutral-400 flex-shrink-0" suppressHydrationWarning>
             {email.date.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
