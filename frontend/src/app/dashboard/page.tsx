@@ -34,59 +34,14 @@ function getDateStr(): string {
 // Mock data
 // ---------------------------------------------------------------------------
 
-const REVENUE_TREND = [
-  { mes: 'Nov', ingreso: 18200000, gasto: 12400000 },
-  { mes: 'Dic', ingreso: 22500000, gasto: 14100000 },
-  { mes: 'Ene', ingreso: 19800000, gasto: 13200000 },
-  { mes: 'Feb', ingreso: 24100000, gasto: 15600000 },
-  { mes: 'Mar', ingreso: 28900000, gasto: 16800000 },
-  { mes: 'Abr', ingreso: 31200000, gasto: 17400000 },
-];
-
-const CHANNEL_SPEND = [
-  { canal: 'Google Ads', gasto: 2100000, conversiones: 144 },
-  { canal: 'Meta Ads',   gasto: 5137000, conversiones: 126 },
-  { canal: 'TikTok',     gasto: 890000,  conversiones: 68 },
-  { canal: 'Email',      gasto: 500000,  conversiones: 63 },
-  { canal: 'LinkedIn',   gasto: 1650000, conversiones: 14 },
-];
-
-const PIPELINE_TREND = [
-  { sem: 'S1', valor: 42000000 }, { sem: 'S2', valor: 58000000 },
-  { sem: 'S3', valor: 51000000 }, { sem: 'S4', valor: 67000000 },
-  { sem: 'S5', valor: 74000000 }, { sem: 'S6', valor: 89000000 },
-  { sem: 'S7', valor: 95000000 }, { sem: 'S8', valor: 107200000 },
-];
-
-const IMPORTANT_EMAILS = [
-  { id: 1, from: 'Cencosud Retail',  subject: 'Confirmación OC #4892 — Aprobada',      time: 'Hace 25 min', avatar: 'CR', color: 'bg-red-500',    unread: true },
-  { id: 2, from: 'UDLA Universidad', subject: 'Re: Propuesta módulo SCM Q2 2026',       time: 'Hace 1 hora', avatar: 'UU', color: 'bg-blue-600',   unread: true },
-  { id: 3, from: 'Fracttal SpA',     subject: 'Factura #1002 — Pago recibido',          time: 'Hace 2 horas',avatar: 'FS', color: 'bg-emerald-600',unread: false },
-  { id: 4, from: 'Banco Estado',     subject: 'Notificación transferencia recibida',     time: 'Hace 3 horas',avatar: 'BE', color: 'bg-blue-800',   unread: false },
-  { id: 5, from: 'Sodimac S.A.',     subject: 'Actualización estado pedido #7712',       time: 'Ayer',        avatar: 'SD', color: 'bg-orange-500', unread: false },
-];
-
-const RECENT_DEALS = [
-  { name: 'Módulo SCM — Cencosud',   stage: 'Negociación',   value: 18000000, prob: 60 },
-  { name: 'ERP Cloud — Falabella',    stage: 'Propuesta',     value: 35000000, prob: 15 },
-  { name: 'CRM Pro — ICI Ingeniería', stage: 'Cerrado',       value: 12500000, prob: 100 },
-  { name: 'BPMS Lite — AVEVA',        stage: 'Descubrimiento',value: 8200000,  prob: 25 },
-];
-
-const SII_ALERTS = [
-  { label: 'Facturas emitidas (abril)', value: 8 },
-  { label: 'Facturas pendientes',        value: 2, warn: true },
-  { label: 'IVA débito acumulado',       money: 2637200 },
-  { label: 'Próxima declaración F29',    date: '2026-05-12' },
-];
-
-const MOCK_BPMS_TASKS = [
-  { id: 't1', name: 'Cotizar pedido Mesa Comedor',  role: 'vendedor',     dueIn: '2h',  overdue: false },
-  { id: 't2', name: 'Aprobar solicitud de compra',  role: 'jefe_bodega',  dueIn: '—',   overdue: true  },
-  { id: 't3', name: 'Inspección de calidad OT-007', role: 'control_calidad', dueIn: '4h', overdue: false },
-];
-
-const MOCK_SCM = { availableBoards: 12, activeOrders: 3, availableOffcuts: 8, areaM2: 43.2 };
+const REVENUE_TREND: { mes: string; ingreso: number; gasto: number }[] = [];
+const CHANNEL_SPEND: { canal: string; gasto: number; conversiones: number }[] = [];
+const PIPELINE_TREND: { sem: string; valor: number }[] = [];
+const IMPORTANT_EMAILS: { id: number; from: string; subject: string; time: string; avatar: string; color: string; unread: boolean }[] = [];
+const RECENT_DEALS: { name: string; stage: string; value: number; prob: number }[] = [];
+const SII_ALERTS: { label: string; value?: number; warn?: boolean; money?: number; date?: string }[] = [];
+const MOCK_BPMS_TASKS: { id: string; name: string; role: string; dueIn: string; overdue: boolean }[] = [];
+const MOCK_SCM = { availableBoards: 0, activeOrders: 0, availableOffcuts: 0, areaM2: 0 };
 
 // ---------------------------------------------------------------------------
 // Icons

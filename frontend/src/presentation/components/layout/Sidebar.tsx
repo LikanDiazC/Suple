@@ -63,7 +63,6 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
         href: '/dashboard/scm',
         icon: <TruckIcon />,
         children: [
-          { label: 'Panel SCM',          href: '/dashboard/scm' },
           { label: 'Inventario',         href: '/dashboard/scm/inventory' },
           { label: 'Órdenes de Corte',   href: '/dashboard/scm/work-orders' },
           { label: 'Nueva Orden',        href: '/dashboard/scm/work-orders/new' },
@@ -74,7 +73,6 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
         href: '/dashboard/bpms',
         icon: <WorkflowIcon />,
         children: [
-          { label: 'Panel BPMS', href: '/dashboard/bpms' },
           { label: 'Procesos',   href: '/dashboard/bpms/processes' },
           { label: 'Mis Tareas', href: '/dashboard/bpms/tasks' },
           { label: 'Monitor',    href: '/dashboard/bpms/monitor' },
@@ -346,7 +344,6 @@ export default function Sidebar() {
                 className="min-w-0"
               >
                 <p className="truncate text-sm font-semibold text-neutral-900">Suple</p>
-                <p className="truncate text-xs text-neutral-400">tnt_demo01</p>
               </motion.div>
             )}
           </AnimatePresence>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { staggerContainer, staggerItem } from '../../animations/variants';
 import { useCrmTable } from '../../../application/context/crm-table';
@@ -32,6 +32,90 @@ interface CrmTableViewProps {
   title: string;
   tabs: { label: string; count?: number; active?: boolean }[];
   onAddRecord: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Avatar helpers — Gravatar for contacts, Clearbit Logo for companies
+// ---------------------------------------------------------------------------
+
+function md5(str: string): string {
+  // Simple browser-compatible MD5 for Gravatar (non-cryptographic use)
+  // Using a known-good implementation inline to avoid dependencies
+  const hex = (n: number) => n.toString(16).padStart(2, '0');
+  const s = unescape(encodeURIComponent(str));
+  const bytes = Array.from(s).map((c) => c.charCodeAt(0));
+  // Pad
+  const len = bytes.length;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  const lenBits = len * 8;
+  for (let i = 0; i < 8; i++) bytes.push((lenBits / Math.pow(2, i * 8)) & 0xff);
+  let [a, b, c, d] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+  const T = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0);
+  const S = [[7,12,17,22],[5,9,14,20],[4,11,16,23],[6,10,15,21]];
+  const rot = (x: number, n: number) => (x << n) | (x >>> (32 - n));
+  for (let i = 0; i < bytes.length; i += 64) {
+    const M = Array.from({ length: 16 }, (_, j) =>
+      (bytes[i+j*4]|0) | ((bytes[i+j*4+1]|0)<<8) | ((bytes[i+j*4+2]|0)<<16) | ((bytes[i+j*4+3]|0)<<24));
+    let [A,B,C,D] = [a,b,c,d];
+    for (let j = 0; j < 64; j++) {
+      let [F,g] = [0,0];
+      if (j<16) { F=(B&C)|(~B&D); g=j; }
+      else if (j<32) { F=(D&B)|(~D&C); g=(5*j+1)%16; }
+      else if (j<48) { F=B^C^D; g=(3*j+5)%16; }
+      else { F=C^(B|(~D)); g=(7*j)%16; }
+      F = (F+A+T[j]+M[g])>>>0;
+      A=D; D=C; C=B; B=(B+rot(F,S[Math.floor(j/16)][j%4]))>>>0;
+    }
+    a=(a+A)>>>0; b=(b+B)>>>0; c=(c+C)>>>0; d=(d+D)>>>0;
+  }
+  return [a,b,c,d].map(v => [v&0xff,(v>>8)&0xff,(v>>16)&0xff,(v>>24)&0xff].map(hex).join('')).join('');
+}
+
+function getGravatarUrl(email: string, size = 40): string {
+  const hash = md5(email.trim().toLowerCase());
+  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
+}
+
+function getClearbitLogoUrl(domain: string): string {
+  const clean = domain.replace(/^https?:\/\//, '').split('/')[0];
+  return `https://logo.clearbit.com/${clean}`;
+}
+
+function RecordAvatar({ initials, email, domain, size = 7 }: {
+  initials: string;
+  email?: string;
+  domain?: string;
+  size?: number;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const imgSrc = email ? getGravatarUrl(email) : domain ? getClearbitLogoUrl(domain) : null;
+  const px = size * 4; // tailwind size → px approx
+
+  if (imgSrc && !imgError) {
+    return (
+      <img
+        src={imgSrc}
+        alt={initials}
+        width={px}
+        height={px}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: px, height: px }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0"
+      style={{ width: px, height: px }}
+    >
+      <span style={{ fontSize: px * 0.32, fontWeight: 700 }} className="text-primary-700">
+        {initials}
+      </span>
+    </div>
+  );
 }
 
 export default function CrmTableView({ title, tabs, onAddRecord }: CrmTableViewProps) {
@@ -562,9 +646,12 @@ function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort,
                     <td key={col.key} className="px-4 py-3">
                       {colIdx === 0 ? (
                         <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 flex-shrink-0 rounded-full bg-primary-100 flex items-center justify-center">
-                            <span className="text-[10px] font-bold text-primary-700">{getInitials(record)}</span>
-                          </div>
+                          <RecordAvatar
+                            initials={getInitials(record)}
+                            email={record.properties['email']}
+                            domain={record.properties['domain']}
+                            size={7}
+                          />
                           <button
                             onClick={(e) => { e.stopPropagation(); selectRecord(record.id); }}
                             className="text-sm font-medium text-primary-600 hover:underline truncate max-w-[200px] text-left"
@@ -783,9 +870,12 @@ function BoardView({ records, loading, getDisplayName, getInitials, formatValue,
               {/* Card header */}
               <div className="p-4 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                    <span className="text-sm font-bold text-white">{initials}</span>
-                  </div>
+                  <RecordAvatar
+                    initials={initials}
+                    email={record.properties['email']}
+                    domain={record.properties['domain']}
+                    size={10}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-neutral-900 truncate">{name}</p>
                     {email && <p className="text-xs text-neutral-500 truncate">{email}</p>}

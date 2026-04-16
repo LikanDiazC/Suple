@@ -100,7 +100,6 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
                 <div className="border-b border-neutral-100 px-3 py-2 mb-1">
                   <p className="text-sm font-semibold text-neutral-800">{displayName}</p>
                   <p className="text-xs text-neutral-400">{displayEmail}</p>
-                  <p className="mt-1 text-[10px] font-medium text-primary-600">Tenant: tnt_demo01</p>
                 </div>
                 <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50">
                   <span>Preferencias de cuenta</span>

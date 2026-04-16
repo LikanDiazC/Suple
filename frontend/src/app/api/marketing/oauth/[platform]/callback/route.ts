@@ -20,6 +20,19 @@ export async function GET(
   { params }: { params: Promise<{ platform: string }> },
 ) {
   const { platform: slug } = await params;
+
+  // Hard 20s timeout for the whole callback — prevents browser from hanging
+  const timeout = new Promise<NextResponse>((resolve) =>
+    setTimeout(() => {
+      console.error(`[OAuth:${slug}] Callback timeout after 20s`);
+      resolve(redirectWithError('Callback timeout — please try again', request));
+    }, 20000),
+  );
+
+  return Promise.race([handleCallback(request, slug), timeout]);
+}
+
+async function handleCallback(request: NextRequest, slug: string): Promise<NextResponse> {
   const platform = slugToPlatform(slug);
 
   if (!platform) {
@@ -62,9 +75,12 @@ export async function GET(
 
   let tokenSet;
   try {
+    console.log(`[OAuth:${slug}] Exchanging code for tokens. redirectUri=${redirectUri}`);
     tokenSet = await service.exchangeCode(code, redirectUri);
+    console.log(`[OAuth:${slug}] Token exchange OK. hasRefreshToken=${!!tokenSet.refreshToken} expiresIn=${tokenSet.expiresIn}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Token exchange failed';
+    console.error(`[OAuth:${slug}] Token exchange FAILED: ${msg}`);
     return redirectWithError(msg, request);
   }
 
@@ -82,19 +98,11 @@ export async function GET(
     });
   }
 
-  // ── Optionally fetch ad accounts to store the first one ──────────────
-  let adAccountId: string | null = null;
-  let adAccountName: string | null = null;
-
-  try {
-    const accounts = await service.getAdAccounts(tokenSet.accessToken);
-    if (accounts.length > 0) {
-      adAccountId = accounts[0].id;
-      adAccountName = accounts[0].name;
-    }
-  } catch {
-    // Non-fatal — user can select ad account later
-  }
+  // ── Skip getAdAccounts in callback (requires Google Ads API enabled + approved dev token)
+  // Ad account ID can be populated later via a dedicated settings flow.
+  const adAccountId: string | null = null;
+  const adAccountName: string | null = null;
+  console.log(`[OAuth:${slug}] Skipping ad account lookup — storing tokens only`);
 
   // ── Upsert the connection ────────────────────────────────────────────
   const encryptedAccessToken = encrypt(tokenSet.accessToken);

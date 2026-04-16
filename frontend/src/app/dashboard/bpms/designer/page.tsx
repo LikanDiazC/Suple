@@ -179,6 +179,127 @@ function ExclusiveGatewayNode(props: any) { return <GatewayBase {...props} color
 function ParallelGatewayNode(props: any) { return <GatewayBase {...props} color="#60a5fa" symbol="+" />; }
 function InclusiveGatewayNode(props: any) { return <GatewayBase {...props} color="#2dd4bf" symbol="O" />; }
 
+// ─── BPMN 2.0 Intermediate Event ─────────────────────────────────────────────
+
+function IntermediateEventBase({ data, selected, color, symbol }: { data: any; selected?: boolean; color: string; symbol: React.ReactNode }) {
+  return (
+    <div style={{ position: 'relative', width: 40, height: 40 }}>
+      <Handle type="target" position={Position.Left} style={{ background: color, width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Right} style={{ background: color, width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: color, width: 10, height: 10, border: '2px solid white' }} />
+      <svg width="40" height="40" viewBox="0 0 40 40" style={{ position: 'absolute', inset: 0 }}>
+        <circle cx="20" cy="20" r="17" fill="white" stroke={color} strokeWidth={selected ? 3 : 2} />
+        <circle cx="20" cy="20" r="13" fill="none" stroke={color} strokeWidth={1.5} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {symbol}
+      </div>
+      {data.name && (
+        <div style={{ position: 'absolute', top: '110%', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600, color: '#374151' }}>
+          {data.name}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimerEventNode(props: any) {
+  return <IntermediateEventBase {...props} color="#f59e0b" symbol={
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#f59e0b" strokeWidth="1.5">
+      <circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 2" strokeLinecap="round"/>
+    </svg>
+  } />;
+}
+
+function MessageEventNode(props: any) {
+  return <IntermediateEventBase {...props} color="#3b82f6" symbol={
+    <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="#3b82f6" strokeWidth="1.5">
+      <rect x="1" y="1" width="12" height="10" rx="1"/><path d="M1 3l6 4 6-4"/>
+    </svg>
+  } />;
+}
+
+// ─── BPMN 2.0 Script Task ────────────────────────────────────────────────────
+
+function ScriptTaskNode({ data, selected }: { data: any; selected?: boolean }) {
+  return (
+    <div style={{
+      width: 180, minHeight: 70, borderRadius: 10, overflow: 'hidden',
+      border: selected ? '2px solid #059669' : '1.5px solid #a7f3d0',
+      boxShadow: selected ? '0 0 0 3px rgba(5,150,105,0.2)' : '0 2px 8px rgba(0,0,0,0.08)',
+      background: 'white',
+    }}>
+      <Handle type="target" position={Position.Left} style={{ background: '#059669', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="target" position={Position.Top} style={{ background: '#059669', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Right} style={{ background: '#059669', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: '#059669', width: 10, height: 10, border: '2px solid white' }} />
+      <div style={{ background: '#059669', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="white"><path d="M2 4h12M2 8h8M2 12h10" strokeWidth="2" stroke="white" strokeLinecap="round"/></svg>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
+          {data.name || 'Tarea de script'}
+        </span>
+      </div>
+      <div style={{ padding: '5px 8px 6px' }}>
+        {data.config?.scriptType && (
+          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 600, background: '#d1fae5', color: '#065f46', borderRadius: 4, padding: '1px 6px' }}>
+            {data.config.scriptType}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BPMN 2.0 Sub-Process ────────────────────────────────────────────────────
+
+function SubProcessNode({ data, selected }: { data: any; selected?: boolean }) {
+  return (
+    <div style={{
+      width: 220, minHeight: 90, borderRadius: 12,
+      border: selected ? '2px solid #6366f1' : '1.5px solid #c7d2fe',
+      boxShadow: selected ? '0 0 0 3px rgba(99,102,241,0.2)' : '0 2px 8px rgba(0,0,0,0.06)',
+      background: 'white',
+      position: 'relative',
+    }}>
+      <Handle type="target" position={Position.Left} style={{ background: '#6366f1', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="target" position={Position.Top} style={{ background: '#6366f1', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Right} style={{ background: '#6366f1', width: 10, height: 10, border: '2px solid white' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: '#6366f1', width: 10, height: 10, border: '2px solid white' }} />
+      <div style={{ background: '#6366f1', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, borderRadius: '10px 10px 0 0' }}>
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 6h12"/><path d="M6 10h4"/></svg>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 175 }}>
+          {data.name || 'Sub-proceso'}
+        </span>
+      </div>
+      <div style={{ padding: '10px 8px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 9, fontWeight: 600, color: '#818cf8', textTransform: 'uppercase', letterSpacing: 1 }}>Sub-proceso</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#6366f1" strokeWidth="1.5" style={{ marginLeft: 4 }}><path d="M6 2v8M3 5l3-3 3 3"/></svg>
+      </div>
+      {/* BPMN 2.0 marker */}
+      <div style={{ position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)' }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6366f1" strokeWidth="1.5"><rect x="2" y="2" width="10" height="10" rx="1"/><path d="M7 5v4M5 7h4"/></svg>
+      </div>
+    </div>
+  );
+}
+
+// ─── BPMN 2.0 Text Annotation ────────────────────────────────────────────────
+
+function TextAnnotationNode({ data, selected }: { data: any; selected?: boolean }) {
+  return (
+    <div style={{
+      minWidth: 140, minHeight: 50, padding: '6px 10px',
+      borderLeft: `3px solid ${selected ? '#374151' : '#9ca3af'}`,
+      background: selected ? '#f9fafb' : 'transparent',
+    }}>
+      <Handle type="target" position={Position.Left} style={{ background: '#9ca3af', width: 8, height: 8, border: '2px solid white' }} />
+      <p style={{ fontSize: 11, color: '#374151', margin: 0, lineHeight: 1.5 }}>
+        {data.name || 'Anotación'}
+      </p>
+    </div>
+  );
+}
+
 // ─── nodeTypes ───────────────────────────────────────────────────────────────
 
 const nodeTypes: NodeTypes = {
@@ -189,6 +310,11 @@ const nodeTypes: NodeTypes = {
   EXCLUSIVE_GATEWAY: ExclusiveGatewayNode,
   PARALLEL_GATEWAY: ParallelGatewayNode,
   INCLUSIVE_GATEWAY: InclusiveGatewayNode,
+  TIMER_EVENT: TimerEventNode,
+  MESSAGE_EVENT: MessageEventNode,
+  SCRIPT_TASK: ScriptTaskNode,
+  SUB_PROCESS: SubProcessNode,
+  TEXT_ANNOTATION: TextAnnotationNode,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -201,13 +327,18 @@ const ASSIGNEE_ROLES = [
 const SERVICE_TYPES = ['SCM_OPTIMIZE', 'SEND_EMAIL', 'WEBHOOK'];
 
 const PALETTE_ITEMS = [
-  { type: 'START_EVENT',        label: 'Evento de inicio',    color: '#22c55e', shape: 'circle' },
-  { type: 'END_EVENT',          label: 'Evento de fin',       color: '#f97316', shape: 'circle' },
-  { type: 'USER_TASK',          label: 'Tarea de usuario',    color: '#1d4ed8', shape: 'rect' },
-  { type: 'SERVICE_TASK',       label: 'Tarea de servicio',   color: '#7e22ce', shape: 'rect' },
-  { type: 'EXCLUSIVE_GATEWAY',  label: 'Gateway exclusivo',   color: '#fde047', shape: 'diamond' },
-  { type: 'PARALLEL_GATEWAY',   label: 'Gateway paralelo',    color: '#60a5fa', shape: 'diamond' },
-  { type: 'INCLUSIVE_GATEWAY',  label: 'Gateway inclusivo',   color: '#2dd4bf', shape: 'diamond' },
+  { type: 'START_EVENT',        label: 'Evento inicio',       color: '#22c55e', shape: 'circle' },
+  { type: 'END_EVENT',          label: 'Evento fin',          color: '#f97316', shape: 'circle' },
+  { type: 'TIMER_EVENT',        label: 'Ev. temporizador',    color: '#f59e0b', shape: 'circle-double' },
+  { type: 'MESSAGE_EVENT',      label: 'Ev. mensaje',         color: '#3b82f6', shape: 'circle-double' },
+  { type: 'USER_TASK',          label: 'Tarea usuario',       color: '#1d4ed8', shape: 'rect' },
+  { type: 'SERVICE_TASK',       label: 'Tarea servicio',      color: '#7e22ce', shape: 'rect' },
+  { type: 'SCRIPT_TASK',        label: 'Tarea script',        color: '#059669', shape: 'rect' },
+  { type: 'SUB_PROCESS',        label: 'Sub-proceso',         color: '#6366f1', shape: 'rect-round' },
+  { type: 'EXCLUSIVE_GATEWAY',  label: 'Gateway XOR',         color: '#ca8a04', shape: 'diamond' },
+  { type: 'PARALLEL_GATEWAY',   label: 'Gateway AND',         color: '#60a5fa', shape: 'diamond' },
+  { type: 'INCLUSIVE_GATEWAY',  label: 'Gateway OR',          color: '#2dd4bf', shape: 'diamond' },
+  { type: 'TEXT_ANNOTATION',    label: 'Anotación',           color: '#9ca3af', shape: 'annotation' },
 ];
 
 /**
@@ -217,19 +348,26 @@ const PALETTE_ITEMS = [
 const NODE_TYPE_LABEL: Record<string, string> = {
   START_EVENT:        'Evento de inicio',
   END_EVENT:          'Evento de fin',
+  TIMER_EVENT:        'Evento temporizador',
+  MESSAGE_EVENT:      'Evento de mensaje',
   USER_TASK:          'Tarea de usuario',
   SERVICE_TASK:       'Tarea de servicio',
-  EXCLUSIVE_GATEWAY:  'Gateway exclusivo',
-  PARALLEL_GATEWAY:   'Gateway paralelo',
-  INCLUSIVE_GATEWAY:  'Gateway inclusivo',
+  SCRIPT_TASK:        'Tarea de script',
+  SUB_PROCESS:        'Sub-proceso',
+  EXCLUSIVE_GATEWAY:  'Gateway exclusivo (XOR)',
+  PARALLEL_GATEWAY:   'Gateway paralelo (AND)',
+  INCLUSIVE_GATEWAY:  'Gateway inclusivo (OR)',
+  TEXT_ANNOTATION:    'Anotación de texto',
 };
 
 function getDefaultName(type: string): string {
   const map: Record<string, string> = {
     START_EVENT: 'Inicio', END_EVENT: 'Fin',
+    TIMER_EVENT: 'Temporizador', MESSAGE_EVENT: 'Mensaje',
     USER_TASK: 'Tarea Usuario', SERVICE_TASK: 'Servicio',
+    SCRIPT_TASK: 'Script', SUB_PROCESS: 'Sub-proceso',
     EXCLUSIVE_GATEWAY: 'Gateway XOR', PARALLEL_GATEWAY: 'Gateway AND',
-    INCLUSIVE_GATEWAY: 'Gateway OR',
+    INCLUSIVE_GATEWAY: 'Gateway OR', TEXT_ANNOTATION: 'Anotación',
   };
   return map[type] ?? type;
 }
@@ -504,10 +642,10 @@ function DesignerInner() {
       if (!rfInstance || !reactFlowWrapper.current) return;
       const type = event.dataTransfer.getData('application/bpms-node-type');
       if (!type) return;
-      const bounds = reactFlowWrapper.current.getBoundingClientRect();
+      // screenToFlowPosition expects viewport (screen) coordinates directly
       const position = rfInstance.screenToFlowPosition({
-        x: event.clientX - bounds.left,
-        y: event.clientY - bounds.top,
+        x: event.clientX,
+        y: event.clientY,
       });
       const newNode: Node = {
         id: `node-${Date.now()}`,

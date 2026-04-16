@@ -17,6 +17,13 @@ import type {
 
 const GOOGLE_ADS_API = 'https://googleads.googleapis.com/v16';
 
+/** Fetch with a hard timeout. Throws DOMException('AbortError') on timeout. */
+function fetchWithTimeout(url: string, options: RequestInit, ms = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 export class GoogleAdsService implements IMarketingService {
   readonly platform = 'GOOGLE_ADS' as const;
 
@@ -49,7 +56,7 @@ export class GoogleAdsService implements IMarketingService {
   }
 
   async exchangeCode(code: string, redirectUri: string): Promise<OAuthTokenSet> {
-    const res = await fetch('https://oauth2.googleapis.com/token', {
+    const res = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -59,9 +66,12 @@ export class GoogleAdsService implements IMarketingService {
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
-    });
+    }, 15000);
 
-    if (!res.ok) throw new Error(`Google Ads token exchange failed: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Google Ads token exchange failed: ${res.status} ${body}`);
+    }
 
     const json = await res.json();
     return {
@@ -73,7 +83,7 @@ export class GoogleAdsService implements IMarketingService {
   }
 
   async refreshToken(refreshToken: string): Promise<OAuthTokenSet> {
-    const res = await fetch('https://oauth2.googleapis.com/token', {
+    const res = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -82,7 +92,7 @@ export class GoogleAdsService implements IMarketingService {
         client_secret: this.clientSecret,
         grant_type: 'refresh_token',
       }),
-    });
+    }, 15000);
 
     if (!res.ok) throw new Error(`Google Ads token refresh failed: ${res.status}`);
 
@@ -96,9 +106,11 @@ export class GoogleAdsService implements IMarketingService {
   // ── Ad Accounts (Customer IDs) ──────────────────────────────────────────
 
   async getAdAccounts(accessToken: string): Promise<AdAccount[]> {
-    // Google Ads uses "customers" instead of "ad accounts".
-    // ListAccessibleCustomers returns all customer IDs the token can access.
-    const res = await fetch(
+    if (!this.developerToken) {
+      console.warn('[Google Ads] GOOGLE_ADS_DEVELOPER_TOKEN not set — skipping getAdAccounts');
+      return [];
+    }
+    const res = await fetchWithTimeout(
       `${GOOGLE_ADS_API}/customers:listAccessibleCustomers`,
       {
         headers: {
@@ -106,9 +118,13 @@ export class GoogleAdsService implements IMarketingService {
           'developer-token': this.developerToken,
         },
       },
+      8000,
     );
 
-    if (!res.ok) throw new Error(`Google Ads getAdAccounts failed: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Google Ads getAdAccounts failed: ${res.status} ${body}`);
+    }
 
     const json = await res.json();
     const customerResourceNames: string[] = json.resourceNames ?? [];
@@ -143,7 +159,7 @@ export class GoogleAdsService implements IMarketingService {
 
     const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${GOOGLE_ADS_API}/customers/${customerId}/googleAds:searchStream`,
       {
         method: 'POST',
@@ -155,9 +171,13 @@ export class GoogleAdsService implements IMarketingService {
         },
         body: JSON.stringify({ query }),
       },
+      20000,
     );
 
-    if (!res.ok) throw new Error(`Google Ads getCampaigns failed: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Google Ads getCampaigns failed: ${res.status} ${body}`);
+    }
 
     const json = await res.json();
     const rows = json[0]?.results ?? [];

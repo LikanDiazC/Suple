@@ -31,11 +31,39 @@ export async function GET(request: NextRequest) {
         });
 
         if (conn) {
-          const accessToken = decrypt(conn.encryptedAccessToken);
+          let accessToken = decrypt(conn.encryptedAccessToken);
           const service = getMarketingService('GOOGLE_ADS');
           const adAccountId = conn.adAccountId ?? '';
 
+          // Auto-refresh token if expired or close to expiry
+          if (conn.encryptedRefreshToken && conn.tokenExpiresAt) {
+            const expiresAt = new Date(conn.tokenExpiresAt).getTime();
+            if (Date.now() > expiresAt - 5 * 60 * 1000) {
+              try {
+                const refreshToken = decrypt(conn.encryptedRefreshToken);
+                const newTokens = await service.refreshToken(refreshToken);
+                accessToken = newTokens.accessToken;
+                const { encrypt } = await import('@/lib/encryption');
+                await prisma.marketingConnection.update({
+                  where: { id: conn.id },
+                  data: {
+                    encryptedAccessToken: encrypt(newTokens.accessToken),
+                    ...(newTokens.refreshToken ? { encryptedRefreshToken: encrypt(newTokens.refreshToken) } : {}),
+                    tokenExpiresAt: newTokens.expiresIn ? new Date(Date.now() + newTokens.expiresIn * 1000) : null,
+                    status: 'ACTIVE',
+                  },
+                });
+                console.log('[Google Ads] Token refreshed successfully');
+              } catch (refreshErr) {
+                const msg = refreshErr instanceof Error ? refreshErr.message : 'unknown';
+                console.warn(`[Google Ads] Token refresh failed: ${msg}`);
+                await prisma.marketingConnection.update({ where: { id: conn.id }, data: { status: 'EXPIRED' } });
+              }
+            }
+          }
+
           try {
+            console.log(`[Google Ads] Fetching campaigns for account: ${adAccountId || 'default'}`);
             const campaigns = await service.getCampaigns(accessToken, adAccountId);
             const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
             const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
