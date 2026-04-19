@@ -107,6 +107,10 @@ export class CrmRecord extends AggregateRoot<CrmRecordProps> {
     return Result.ok(record);
   }
 
+  static rehydrate(id: UniqueId, tenantId: string, props: CrmRecordProps): CrmRecord {
+    return new CrmRecord(id, tenantId, props);
+  }
+
   /**
    * Updates one or more properties on this record.
    * Syncs hot-path SQL columns when relevant properties change.

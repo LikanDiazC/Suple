@@ -16,13 +16,13 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
   const { user, signOut } = useAuth();
   const { open: openMobileMenu } = useMobileMenu();
 
-  const displayName = user?.name || 'Admin User';
+  const displayName = user?.fullName || 'Admin User';
   const displayEmail = user?.email || 'admin@suple.cl';
   const nameParts = displayName.split(' ').filter(Boolean);
   const initials = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
     : displayName.slice(0, 2).toUpperCase();
-  const userImage = user?.image || null;
+  const userImage: string | null = null;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-neutral-200 bg-white/80 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
@@ -105,7 +105,7 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
                   <span>Preferencias de cuenta</span>
                 </button>
                 <button
-                  onClick={() => signOut({ callbackUrl: '/' })}
+                  onClick={() => { void signOut(); window.location.href = '/'; }}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger-600 hover:bg-danger-50"
                 >
                   <span>Cerrar sesión</span>

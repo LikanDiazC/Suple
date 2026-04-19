@@ -7,105 +7,102 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { tokens } from '../../theme/tokens';
 import { sidebarVariants } from '../../animations/variants';
 import { useMobileMenu } from '../../../application/context/mobile-menu/MobileMenuContext';
+import { useTranslation } from '../../../application/context/locale/LocaleContext';
+import type { TranslationKey } from '../../../application/i18n/translations';
 
 interface NavItem {
-  label: string;
+  labelKey: TranslationKey;
   href: string;
   icon: React.ReactNode;
   badge?: number;
-  children?: { label: string; href: string }[];
+  children?: { labelKey: TranslationKey; href: string }[];
 }
 
-const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
+const NAV_SECTIONS_DEF: { titleKey: TranslationKey; items: NavItem[] }[] = [
   {
-    title: 'General',
+    titleKey: 'nav.general',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <GridIcon /> },
+      { labelKey: 'nav.dashboard', href: '/dashboard', icon: <GridIcon /> },
     ],
   },
   {
-    title: 'Módulos',
+    titleKey: 'nav.modules',
     items: [
       {
-        label: 'CRM',
+        labelKey: 'nav.crm',
         href: '/dashboard/crm',
         icon: <UsersIcon />,
         children: [
-          { label: 'Contactos',          href: '/dashboard/crm/contacts' },
-          { label: 'Empresas',           href: '/dashboard/crm/companies' },
-          { label: 'Deals & Pipeline',   href: '/dashboard/crm/deals' },
-          { label: 'Bandeja de entrada', href: '/dashboard/crm/inbox' },
+          { labelKey: 'nav.contacts',  href: '/dashboard/crm/contacts' },
+          { labelKey: 'nav.companies', href: '/dashboard/crm/companies' },
+          { labelKey: 'nav.deals',     href: '/dashboard/crm/deals' },
+          { labelKey: 'nav.inbox',     href: '/dashboard/crm/inbox' },
+          { labelKey: 'nav.catalog',   href: '/dashboard/crm/catalog' },
         ],
       },
       {
-        label: 'Marketing',
+        labelKey: 'nav.marketing',
         href: '/dashboard/marketing',
         icon: <MegaphoneIcon />,
         children: [
-          { label: 'Campañas',   href: '/dashboard/marketing/campaigns' },
-          { label: 'Anuncios',   href: '/dashboard/marketing/ads' },
-          { label: 'Audiencias', href: '/dashboard/marketing/audiences' },
-          { label: 'Formularios',href: '/dashboard/marketing/forms' },
-          { label: 'Analytics',  href: '/dashboard/marketing/analytics' },
-          { label: 'Conexiones', href: '/dashboard/marketing/connections' },
+          { labelKey: 'nav.campaigns', href: '/dashboard/marketing/campaigns' },
+          { labelKey: 'nav.forms',     href: '/dashboard/marketing/forms' },
         ],
       },
       {
-        label: 'ERP',
+        labelKey: 'nav.erp',
         href: '/dashboard/erp',
         icon: <LedgerIcon />,
         children: [
-          { label: 'Asientos contables', href: '/dashboard/erp' },
+          { labelKey: 'nav.accounting', href: '/dashboard/erp' },
+          { labelKey: 'nav.orders',     href: '/dashboard/erp/orders' },
+          { labelKey: 'nav.sii',        href: '/dashboard/sii' },
         ],
       },
       {
-        label: 'SCM',
+        labelKey: 'nav.scm',
         href: '/dashboard/scm',
         icon: <TruckIcon />,
         children: [
-          { label: 'Inventario',         href: '/dashboard/scm/inventory' },
-          { label: 'Órdenes de Corte',   href: '/dashboard/scm/work-orders' },
-          { label: 'Nueva Orden',        href: '/dashboard/scm/work-orders/new' },
+          { labelKey: 'nav.inventory',  href: '/dashboard/scm/inventory' },
         ],
       },
       {
-        label: 'BPMS',
+        labelKey: 'nav.bpms',
         href: '/dashboard/bpms',
         icon: <WorkflowIcon />,
         children: [
-          { label: 'Procesos',   href: '/dashboard/bpms/processes' },
-          { label: 'Mis Tareas', href: '/dashboard/bpms/tasks' },
-          { label: 'Monitor',    href: '/dashboard/bpms/monitor' },
-          { label: 'Diseñador',  href: '/dashboard/bpms/designer' },
+          { labelKey: 'nav.processes', href: '/dashboard/bpms/processes' },
+          { labelKey: 'nav.tasks',     href: '/dashboard/bpms/tasks' },
+          { labelKey: 'nav.monitor',   href: '/dashboard/bpms/monitor' },
+          { labelKey: 'nav.designer',  href: '/dashboard/bpms/designer' },
         ],
       },
     ],
   },
   {
-    title: 'Impuestos y facturación',
+    titleKey: 'nav.system',
     items: [
-      { label: 'SII / Facturación', href: '/dashboard/sii', icon: <SiiIcon /> },
-    ],
-  },
-  {
-    title: 'Sistema',
-    items: [
-      { label: 'Configuración', href: '/dashboard/settings', icon: <GearIcon /> },
+      { labelKey: 'nav.settings', href: '/dashboard/settings', icon: <GearIcon /> },
     ],
   },
 ];
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['CRM', 'Marketing', 'ERP', 'SCM', 'BPMS', 'Impuestos y facturación']));
+  // Track expanded sections by their href (stable identifier) instead of translated label
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(['/dashboard/crm', '/dashboard/marketing', '/dashboard/erp', '/dashboard/scm', '/dashboard/bpms']),
+  );
   const pathname = usePathname();
   const { isOpen: mobileOpen, close: closeMobile } = useMobileMenu();
+  const { t } = useTranslation();
 
-  const toggleSection = (label: string) => {
+  const toggleSection = (href: string) => {
     setExpandedSections((prev) => {
       const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
+      if (next.has(href)) next.delete(href);
+      else next.add(href);
       return next;
     });
   };
@@ -173,8 +170,8 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4" role="navigation" aria-label="Main navigation">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.title} className="mb-6">
+        {NAV_SECTIONS_DEF.map((section) => (
+          <div key={section.titleKey} className="mb-6">
             <AnimatePresence mode="wait">
               {!collapsed && (
                 <motion.p
@@ -183,7 +180,7 @@ export default function Sidebar() {
                   exit={{ opacity: 0 }}
                   className="mb-2 px-4 text-[10px] font-semibold uppercase tracking-widest text-neutral-400"
                 >
-                  {section.title}
+                  {t(section.titleKey)}
                 </motion.p>
               )}
             </AnimatePresence>
@@ -191,13 +188,13 @@ export default function Sidebar() {
             {section.items.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
               const hasChildren = item.children && item.children.length > 0;
-              const isExpanded = expandedSections.has(item.label);
+              const isExpanded = expandedSections.has(item.href);
 
               return (
                 <div key={item.href}>
                   {hasChildren ? (
                     <button
-                      onClick={() => toggleSection(item.label)}
+                      onClick={() => toggleSection(item.href)}
                       className={`
                         group relative mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-3 rounded-lg px-3 py-2.5
                         text-sm font-medium transition-all duration-150 text-left
@@ -206,7 +203,7 @@ export default function Sidebar() {
                           : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
                         }
                       `}
-                      title={collapsed ? item.label : undefined}
+                      title={collapsed ? t(item.labelKey) : undefined}
                     >
                       {isActive && (
                         <motion.div
@@ -227,7 +224,7 @@ export default function Sidebar() {
                             transition={{ duration: 0.15 }}
                             className="flex-1"
                           >
-                            {item.label}
+                            {t(item.labelKey)}
                           </motion.span>
                         )}
                       </AnimatePresence>
@@ -254,7 +251,7 @@ export default function Sidebar() {
                           : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
                         }
                       `}
-                      title={collapsed ? item.label : undefined}
+                      title={collapsed ? t(item.labelKey) : undefined}
                     >
                       {isActive && !hasChildren && (
                         <motion.div
@@ -274,7 +271,7 @@ export default function Sidebar() {
                             exit={{ opacity: 0, x: -4 }}
                             transition={{ duration: 0.15 }}
                           >
-                            {item.label}
+                            {t(item.labelKey)}
                           </motion.span>
                         )}
                       </AnimatePresence>
@@ -314,7 +311,7 @@ export default function Sidebar() {
                                 `}
                               >
                                 <span className={`h-1.5 w-1.5 rounded-full ${childActive ? 'bg-primary-500' : 'bg-neutral-300'}`} />
-                                {child.label}
+                                {t(child.labelKey)}
                               </Link>
                             );
                           })}

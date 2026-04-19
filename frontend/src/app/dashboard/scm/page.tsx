@@ -22,14 +22,6 @@ interface InventoryItem {
   risk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 }
 
-const MOCK_INVENTORY: InventoryItem[] = [
-  { sku: 'SKU-001', name: 'Rack para servidor A',    stock: 245,  reorderPoint: 80,  dailyDemand: 5.2,  daysOfSupply: 47, turnover: 8.4,  risk: 'LOW' },
-  { sku: 'SKU-002', name: 'Switch de red 48P',       stock: 38,   reorderPoint: 45,  dailyDemand: 3.1,  daysOfSupply: 12, turnover: 11.2, risk: 'HIGH' },
-  { sku: 'SKU-003', name: 'SSD 2TB Pro',             stock: 512,  reorderPoint: 200, dailyDemand: 8.7,  daysOfSupply: 59, turnover: 6.1,  risk: 'LOW' },
-  { sku: 'SKU-004', name: 'Módulo batería UPS',      stock: 15,   reorderPoint: 30,  dailyDemand: 2.4,  daysOfSupply: 6,  turnover: 14.8, risk: 'CRITICAL' },
-  { sku: 'SKU-005', name: 'Rollo cable Cat6a',       stock: 89,   reorderPoint: 60,  dailyDemand: 4.5,  daysOfSupply: 20, turnover: 9.3,  risk: 'MODERATE' },
-  { sku: 'SKU-006', name: 'Panel fibra óptica',      stock: 167,  reorderPoint: 50,  dailyDemand: 2.8,  daysOfSupply: 60, turnover: 5.6,  risk: 'LOW' },
-];
 
 const RISK_LABEL: Record<InventoryItem['risk'], string> = {
   LOW:      'Bajo',
@@ -106,6 +98,9 @@ export default function SCMPage() {
   const [whatIf, setWhatIf] = useState<WhatIfState>({ demandMultiplier: 1.0, leadTimeDays: 14 });
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
 
+  // ── Inventory items for What-If simulator ──
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
   // ── Engine status ──
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('connecting');
 
@@ -170,6 +165,23 @@ export default function SCMPage() {
       }
     }
     fetchStats();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Fetch inventory items for simulator ──
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchInventory() {
+      try {
+        const res = await fetch('/api/scm/inventory', { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (!cancelled) setInventory(data.items ?? data ?? []);
+      } catch {
+        if (!cancelled) setInventory([]);
+      }
+    }
+    fetchInventory();
     return () => { cancelled = true; };
   }, []);
 
@@ -468,7 +480,13 @@ export default function SCMPage() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_INVENTORY.map((item) => {
+              {inventory.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-10 text-center text-neutral-400">
+                    No hay ítems de inventario disponibles.
+                  </td>
+                </tr>
+              ) : inventory.map((item) => {
                 const sim = simulateWhatIf(item);
                 const simRisk =
                   sim.newDays < 7

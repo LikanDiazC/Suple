@@ -14,6 +14,7 @@ interface InventoryGridProps {
   offcuts: Offcut[];
   onBoardSelect?: (board: Board) => void;
   onOffcutSelect?: (offcut: Offcut) => void;
+  onBoardAdjust?: (board: Board) => void;
   isLoading?: boolean;
 }
 
@@ -159,9 +160,10 @@ function SkeletonCard() {
 interface BoardCardProps {
   board: Board;
   onClick?: (board: Board) => void;
+  onAdjust?: (board: Board) => void;
 }
 
-function BoardCard({ board, onClick }: BoardCardProps) {
+function BoardCard({ board, onClick, onAdjust }: BoardCardProps) {
   const statusCfg = getStatusConfig(board.status);
   const { w, h } = indicatorSize(board.widthMm, board.heightMm);
   const isClickable = !!onClick;
@@ -210,17 +212,36 @@ function BoardCard({ board, onClick }: BoardCardProps) {
         </p>
       )}
 
-      {/* Visual area indicator + label */}
-      <div className="mt-3 flex items-end gap-3">
-        <div
-          className="flex-shrink-0 rounded-sm border border-neutral-300 bg-neutral-100"
-          style={{ width: w, height: h }}
-          title={`${board.widthMm}×${board.heightMm}mm proporcional a plancha estándar 2440×1220mm`}
-          aria-hidden="true"
-        />
-        <span className="text-[10px] text-neutral-400 leading-tight">
-          {toM2(board.widthMm * board.heightMm)} m²
-        </span>
+      {/* Visual area indicator + label + adjust button */}
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="flex items-end gap-3">
+          <div
+            className="flex-shrink-0 rounded-sm border border-neutral-300 bg-neutral-100"
+            style={{ width: w, height: h }}
+            title={`${board.widthMm}×${board.heightMm}mm proporcional a plancha estándar 2440×1220mm`}
+            aria-hidden="true"
+          />
+          <span className="text-[10px] text-neutral-400 leading-tight">
+            {toM2(board.widthMm * board.heightMm)} m²
+          </span>
+        </div>
+
+        {onAdjust && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjust(board);
+            }}
+            className="flex-shrink-0 inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-500 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600 active:bg-primary-100"
+            aria-label={`Ajustar stock de plancha ${board.materialSku}`}
+            title="Ajustar stock"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M5 1v8M1 5h8" />
+            </svg>
+            ajustar
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -380,6 +401,7 @@ export default function InventoryGrid({
   offcuts,
   onBoardSelect,
   onOffcutSelect,
+  onBoardAdjust,
   isLoading = false,
 }: InventoryGridProps) {
   const boardStats = useMemo(
@@ -437,6 +459,7 @@ export default function InventoryGrid({
                 key={board.id}
                 board={board}
                 onClick={onBoardSelect}
+                onAdjust={onBoardAdjust}
               />
             ))}
           </motion.div>

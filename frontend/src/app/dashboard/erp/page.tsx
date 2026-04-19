@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import TopBar from '../../../presentation/components/layout/TopBar';
 import { pageTransition, staggerContainer, staggerItem } from '../../../presentation/animations/variants';
@@ -26,20 +26,31 @@ const STATUS_LABEL: Record<EntryStatus, string> = {
   Reversed: 'Reversado',
 };
 
-const MOCK_ENTRIES: JournalEntry[] = [
-  { id: '1', entryNumber: 'JE-2026-001', date: '2026-04-12', description: 'Reconocimiento de ingresos — Servicios Q1',    source: 'FACTURA_CXC',     debit: 284750, credit: 284750, status: 'Posted' },
-  { id: '2', entryNumber: 'JE-2026-002', date: '2026-04-11', description: 'Pago a proveedor — Globex Supply Co.',         source: 'FACTURA_CXP',     debit: 47200,  credit: 47200,  status: 'Posted' },
-  { id: '3', entryNumber: 'JE-2026-003', date: '2026-04-11', description: 'Nómina mensual — Abril 2026',                  source: 'NOMINA',          debit: 156800, credit: 156800, status: 'Posted' },
-  { id: '4', entryNumber: 'JE-2026-004', date: '2026-04-10', description: 'Depreciación de equipos — Data Center',        source: 'DEPRECIACION',    debit: 12400,  credit: 12400,  status: 'Posted' },
-  { id: '5', entryNumber: 'JE-2026-005', date: '2026-04-10', description: 'Ajuste de valorización de inventario',         source: 'INVENTARIO',      debit: 8300,   credit: 8300,   status: 'Draft' },
-  { id: '6', entryNumber: 'JE-2026-006', date: '2026-04-09', description: 'Conciliación bancaria — Cuenta operativa',     source: 'CONCILIACION',    debit: 523000, credit: 523000, status: 'Posted' },
-  { id: '7', entryNumber: 'JE-2026-007', date: '2026-04-08', description: 'Transferencia intercompañía — División UE',    source: 'INTERCOMPANIA',   debit: 91500,  credit: 91500,  status: 'Reversed' },
-];
-
 export default function ERPPage() {
   const [filter, setFilter] = useState<'all' | 'Posted' | 'Draft' | 'Reversed'>('all');
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = filter === 'all' ? MOCK_ENTRIES : MOCK_ENTRIES.filter((e) => e.status === filter);
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchEntries() {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/erp/journal?page=1&limit=50', { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (!cancelled) setEntries(data.items ?? data ?? []);
+      } catch {
+        if (!cancelled) setEntries([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchEntries();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter);
   const totalDebit = filtered.reduce((s, e) => s + e.debit, 0);
   const totalCredit = filtered.reduce((s, e) => s + e.credit, 0);
 
@@ -103,7 +114,20 @@ export default function ERPPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((entry) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-10 text-center text-neutral-400">
+                    <svg className="animate-spin inline-block mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="6" strokeDasharray="20" strokeDashoffset="10"/></svg>
+                    Cargando asientos contables...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-10 text-center text-neutral-400">
+                    No hay asientos contables en este período.
+                  </td>
+                </tr>
+              ) : filtered.map((entry) => (
                 <motion.tr key={entry.id} variants={staggerItem} className="border-b border-neutral-50 hover:bg-neutral-50 transition-colors cursor-pointer">
                   <td className="px-6 py-4 text-sm font-mono font-medium text-primary-600">{entry.entryNumber}</td>
                   <td className="px-6 py-4 text-sm text-neutral-500">{entry.date}</td>

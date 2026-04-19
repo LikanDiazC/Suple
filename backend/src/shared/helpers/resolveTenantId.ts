@@ -1,21 +1,14 @@
 import { Request } from 'express';
+import { UnauthorizedException } from '@nestjs/common';
 
 /**
- * Extracts the tenantId from the request context.
- *
- * Resolution order:
- *   1. `req.authenticatedUser.tenantId` — set by TenantMiddleware after JWT validation.
- *   2. `x-tenant-id` header — dev-mode fallback when route is excluded from middleware.
- *   3. `'tnt_demo01'` — last-resort default for local development.
- *
- * Shared across all controllers to avoid duplication.
+ * Extracts the tenantId set by TenantMiddleware after JWT validation.
+ * Throws if absent — controllers MUST be behind TenantMiddleware.
  */
 export function resolveTenantId(req: Request): string {
-  const user = (req as Record<string, any>).authenticatedUser;
-  if (user?.tenantId) return user.tenantId;
-
-  const header = req.headers['x-tenant-id'];
-  if (typeof header === 'string' && header) return header;
-
-  return 'tnt_demo01';
+  const tenantId = req.authenticatedUser?.tenantId;
+  if (!tenantId) {
+    throw new UnauthorizedException('Missing tenant context — request not authenticated');
+  }
+  return tenantId;
 }

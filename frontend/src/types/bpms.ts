@@ -97,6 +97,13 @@ export interface ProcessInstance {
   entityRef: { type: string; id: string } | null;
 }
 
+export interface TaskComment {
+  id: string;
+  userId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   tenantId: string;
@@ -117,9 +124,11 @@ export interface Task {
   form: FormField[];
   approvalOutcomes: string[];
   submission: Record<string, unknown> | null;
+  comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
   isOverdue?: boolean;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
 export interface BpmsAnalytics {

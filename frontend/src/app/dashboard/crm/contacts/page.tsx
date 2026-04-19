@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import CrmTableView from '../../../../presentation/components/crm/CrmTableView';
 import { CrmTableProvider } from '../../../../application/context/crm-table';
+import { useCrmTable } from '../../../../application/context/crm-table/CrmTableContext';
 import type { ColumnDef, PropertyType } from '../../../../application/context/crm-table/types';
 import { tokens } from '../../../../presentation/theme/tokens';
 
@@ -62,49 +63,33 @@ interface DuplicateWarning {
   field: string;
 }
 
+function useGmailAutoSync(refreshData: () => void) {
+  React.useEffect(() => {
+    fetch('/api/gmail/sync-contacts', { method: 'POST' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { contactsCreated: number } | null) => {
+        if (data && data.contactsCreated > 0) refreshData();
+      })
+      .catch(() => {});
+  // Solo al montar — sin dependencias que cambien
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+function GmailAutoSync() {
+  const { refreshData } = useCrmTable();
+  useGmailAutoSync(refreshData);
+  return null;
+}
+
 export default function ContactsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', company: '' });
   const [duplicates, setDuplicates] = useState<DuplicateWarning[]>([]);
 
-  const KNOWN_EMAILS = [
-    { email: 'admision@udla.cl',           name: 'UDLA' },
-    { email: 'contacto@appcopec.com',      name: 'App Copec' },
-    { email: 'webseminars@aveva.com',      name: 'Tom Turpel from AVEVA' },
-    { email: 'admisionduocuc@duoc.cl',     name: 'Admision Duoc UC' },
-    { email: 'webadm@sii.cl',             name: 'Clave Tributaria SII' },
-    { email: 'communication@fracttal.com', name: 'Christian Struve - Fracttal' },
-    { email: 'workspace@google.com',       name: 'The Google Workspace' },
-    { email: 'contact@napkin.ai',          name: 'Napkin AI' },
-  ];
-
   const handleFieldChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    const warnings: DuplicateWarning[] = [];
-
-    if (field === 'email' && value.length > 4) {
-      const v = value.toLowerCase().trim();
-      for (const known of KNOWN_EMAILS) {
-        const sim = jaroWinkler(v, known.email);
-        if (sim > 0.80 && sim < 1) {
-          warnings.push({ matchedName: known.name, confidence: sim, field: 'email' });
-        }
-      }
-    }
-
-    if (field === 'firstName' || field === 'lastName') {
-      const fullName = `${field === 'firstName' ? value : formData.firstName} ${field === 'lastName' ? value : formData.lastName}`.trim().toLowerCase();
-      if (fullName.length > 3) {
-        for (const known of KNOWN_EMAILS) {
-          const sim = jaroWinkler(fullName, known.name.toLowerCase());
-          if (sim > 0.75) {
-            warnings.push({ matchedName: known.name, confidence: sim, field: 'nombre' });
-          }
-        }
-      }
-    }
-
-    setDuplicates(warnings);
+    setDuplicates([]);
   };
 
   const handleSave = () => {
@@ -224,6 +209,7 @@ export default function ContactsPage() {
         initialColumns={CONTACT_COLUMNS}
         properties={CONTACT_PROPERTIES}
       >
+        <GmailAutoSync />
         <CrmTableView
           title="Contactos"
           tabs={TABS}

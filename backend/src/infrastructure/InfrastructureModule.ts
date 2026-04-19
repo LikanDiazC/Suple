@@ -1,6 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { EventBus } from './messaging/events/EventBus';
 import { KafkaEventProducer } from './messaging/kafka/KafkaProducer';
+import { DatabaseModule } from './database/DatabaseModule';
 
 /**
  * ==========================================================================
@@ -19,6 +20,7 @@ import { KafkaEventProducer } from './messaging/kafka/KafkaProducer';
  */
 @Global()
 @Module({
+  imports: [DatabaseModule],
   providers: [
     EventBus,
     KafkaEventProducer,
@@ -26,6 +28,7 @@ import { KafkaEventProducer } from './messaging/kafka/KafkaProducer';
   exports: [
     EventBus,
     KafkaEventProducer,
+    DatabaseModule,
   ],
 })
 export class InfrastructureModule {}

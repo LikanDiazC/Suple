@@ -1,9 +1,43 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrmTable } from '../../../application/context/crm-table';
 import { useEmailCompose } from '../../../application/context/email/EmailContext';
+
+// ---------------------------------------------------------------------------
+// Label types & helpers (mirrored from CrmTableView, kept self-contained)
+// ---------------------------------------------------------------------------
+
+type RecordLabel = 'important' | 'common' | null;
+
+const LABEL_CONFIG = {
+  important: {
+    dotClass: 'bg-red-500',
+    badgeClass: 'bg-red-50 text-red-700 border border-red-200',
+    text: 'Importante',
+  },
+  common: {
+    dotClass: 'bg-blue-500',
+    badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200',
+    text: 'Cliente',
+  },
+} as const;
+
+const LABEL_OPTIONS: { value: RecordLabel; text: string; dot?: string }[] = [
+  { value: 'important', text: 'Marcar como Importante', dot: 'bg-red-500' },
+  { value: 'common',    text: 'Marcar como Cliente',    dot: 'bg-blue-500' },
+  { value: null,        text: 'Sin etiqueta' },
+];
+
+async function patchLabel(objectType: string, id: string, label: RecordLabel): Promise<void> {
+  await fetch(`/api/crm/${objectType}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    // Send plain value — setProperties() on the backend wraps it in { value, source, updatedAt }
+    body: JSON.stringify({ properties: { _label: label } }),
+  });
+}
 
 /**
  * ==========================================================================
@@ -28,9 +62,52 @@ export default function RecordDetailPanel() {
     removeFromMyRecords,
   } = useCrmTable();
 
-  const { openCompose } = useEmailCompose();
+  const { openCompose, openComposeForContact } = useEmailCompose();
 
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Label state — initialised from the record's _label property
+  const [currentLabel, setCurrentLabel] = useState<RecordLabel>(null);
+  const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
+  const [labelBusy, setLabelBusy] = useState(false);
+  const labelDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync label when selectedRecord changes
+  useEffect(() => {
+    if (!selectedRecord) return;
+    const rawLabel = selectedRecord.properties['_label'];
+    // Handle both plain string ('important') and legacy nested format ({ value: 'important' })
+    const labelVal = rawLabel && typeof rawLabel === 'object' && 'value' in (rawLabel as object)
+      ? (rawLabel as { value: unknown }).value
+      : rawLabel;
+    setCurrentLabel(labelVal === 'important' || labelVal === 'common' ? (labelVal as RecordLabel) : null);
+    setLabelDropdownOpen(false);
+  }, [selectedRecord?.id]);
+
+  // Click-outside for label dropdown
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (labelDropdownRef.current && !labelDropdownRef.current.contains(e.target as Node)) {
+        setLabelDropdownOpen(false);
+      }
+    }
+    if (labelDropdownOpen) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [labelDropdownOpen]);
+
+  const handleLabelSelect = async (label: RecordLabel) => {
+    if (!selectedRecord) return;
+    setLabelDropdownOpen(false);
+    setLabelBusy(true);
+    try {
+      await patchLabel(state.objectType, selectedRecord.id, label);
+      setCurrentLabel(label);
+    } finally {
+      setLabelBusy(false);
+    }
+  };
 
   // Click outside to close
   useEffect(() => {
@@ -161,6 +238,59 @@ export default function RecordDetailPanel() {
                     En mis {objectLabel}
                   </span>
                 )}
+
+                {/* Label badge + dropdown */}
+                <div className="relative mt-1.5 flex items-center gap-1.5" ref={labelDropdownRef}>
+                  {currentLabel ? (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${LABEL_CONFIG[currentLabel].badgeClass}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${LABEL_CONFIG[currentLabel].dotClass}`} />
+                      {LABEL_CONFIG[currentLabel].text}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-neutral-400">Sin etiqueta</span>
+                  )}
+                  <button
+                    onClick={() => setLabelDropdownOpen(!labelDropdownOpen)}
+                    disabled={labelBusy}
+                    title="Cambiar etiqueta"
+                    className="rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors disabled:opacity-40"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M2 4h1.5L6 1.5 8.5 4H10a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
+                      <circle cx="6" cy="6.5" r="1"/>
+                    </svg>
+                  </button>
+                  <AnimatePresence>
+                    {labelDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute left-0 top-full mt-1 z-[80] w-52 rounded-lg border border-neutral-200 bg-white shadow-xl py-1"
+                      >
+                        {LABEL_OPTIONS.map((opt) => (
+                          <button
+                            key={String(opt.value)}
+                            onClick={() => handleLabelSelect(opt.value)}
+                            className={`flex items-center gap-2 w-full px-3 py-2 text-xs text-left transition-colors hover:bg-neutral-50 ${
+                              currentLabel === opt.value ? 'font-semibold text-neutral-900' : 'text-neutral-700'
+                            }`}
+                          >
+                            {opt.dot
+                              ? <span className={`h-2 w-2 rounded-full flex-shrink-0 ${opt.dot}`} />
+                              : <span className="h-2 w-2 rounded-full flex-shrink-0 border border-neutral-300" />
+                            }
+                            {opt.text}
+                            {currentLabel === opt.value && (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" className="ml-auto text-primary-500"><path d="M2 5l2.5 2.5 3.5-4"/></svg>
+                            )}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>
@@ -171,11 +301,20 @@ export default function RecordDetailPanel() {
             {email && (
               <button
                 onClick={() => {
+                  const objectType = state.objectType;
+                  const recordId = selectedRecord.id;
+                  const isContact = objectType === 'contacts';
+                  const isDeal    = objectType === 'deals';
                   selectRecord(null);
-                  openCompose({
-                    to: email,
-                    subject: `Hola ${displayName}`,
-                  });
+                  if (isContact) {
+                    openComposeForContact(email, displayName, recordId);
+                    return;
+                  }
+                  if (isDeal) {
+                    openComposeForContact(email, displayName, undefined, recordId);
+                    return;
+                  }
+                  openCompose({ to: email, subject: `Hola ${displayName}` });
                 }}
                 className="flex items-center gap-3 w-full rounded-lg border border-neutral-200 px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
               >
@@ -248,8 +387,14 @@ export default function RecordDetailPanel() {
             </button>
           </div>
 
-          {/* Properties */}
+          {/* Properties + Email activity */}
           <div className="flex-1 overflow-y-auto px-5 py-4">
+            {(state.objectType === 'contacts' || state.objectType === 'deals') && (
+              <EmailActivitySection
+                contactId={state.objectType === 'contacts' ? selectedRecord.id : undefined}
+                dealId={state.objectType === 'deals' ? selectedRecord.id : undefined}
+              />
+            )}
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">Propiedades</h3>
             <div className="space-y-3">
               {props.map((p) => (
@@ -290,5 +435,107 @@ export default function RecordDetailPanel() {
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Email Activity — sent messages + tracking stats for the selected record
+// ---------------------------------------------------------------------------
+
+interface SentMessageRow {
+  id: string;
+  toEmail: string;
+  subject: string | null;
+  sentAt: string;
+  firstOpenedAt: string | null;
+  openCount: number;
+  firstReplyAt: string | null;
+}
+
+function EmailActivitySection({ contactId, dealId }: { contactId?: string; dealId?: string }) {
+  const [items, setItems] = useState<SentMessageRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams();
+        if (contactId) qs.set('contactId', contactId);
+        if (dealId)    qs.set('dealId',    dealId);
+        const res = await fetch(`/api/gmail/sent?${qs.toString()}`, { cache: 'no-store' });
+        if (!res.ok) { if (!cancelled) setItems([]); return; }
+        const json = await res.json();
+        if (!cancelled) setItems(json.items ?? []);
+      } catch {
+        if (!cancelled) setItems([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [contactId, dealId]);
+
+  if (loading) {
+    return (
+      <div className="mb-6">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">Actividad de correo</h3>
+        <div className="space-y-2">
+          <div className="h-12 rounded-lg bg-neutral-100 animate-pulse" />
+          <div className="h-12 rounded-lg bg-neutral-100 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-3">
+        Actividad de correo {items.length > 0 && <span className="text-neutral-300">· {items.length}</span>}
+      </h3>
+      {items.length === 0 ? (
+        <p className="text-xs text-neutral-400">Sin correos enviados desde Suple.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((m) => {
+            const sent = new Date(m.sentAt);
+            const replyMs = m.firstReplyAt ? new Date(m.firstReplyAt).getTime() - sent.getTime() : null;
+            const replyHours = replyMs !== null ? Math.round(replyMs / 3_600_000 * 10) / 10 : null;
+            return (
+              <li key={m.id} className="rounded-lg border border-neutral-100 px-3 py-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium text-neutral-800 truncate">{m.subject || '(Sin asunto)'}</span>
+                  <span className="text-[10px] text-neutral-400 flex-shrink-0" suppressHydrationWarning>
+                    {sent.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-500 truncate mt-0.5">Para: {m.toEmail}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  {m.firstOpenedAt ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-semibold">
+                      Abierto {m.openCount > 1 ? `${m.openCount}x` : ''}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-neutral-50 text-neutral-500 border border-neutral-200 px-2 py-0.5 text-[10px]">
+                      No abierto
+                    </span>
+                  )}
+                  {m.firstReplyAt ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold">
+                      Respondido{replyHours !== null ? ` · ${replyHours}h` : ''}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-neutral-50 text-neutral-500 border border-neutral-200 px-2 py-0.5 text-[10px]">
+                      Sin respuesta
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

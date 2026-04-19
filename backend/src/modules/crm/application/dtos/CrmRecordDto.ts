@@ -103,6 +103,11 @@ export class ListCrmRecordsQueryDto {
   @MaxLength(200, { message: 'Búsqueda excede largo máximo.' })
   search?: string;
 
+  /** Comma-separated record IDs for "Mis contactos" tab filtering */
+  @IsOptional()
+  @IsString()
+  _ids?: string;
+
   // NOTE: dynamic filters ([key: string]) removed intentionally.
   // The ValidationPipe with forbidNonWhitelisted will reject any
   // extra query params, preventing NoSQL injection via query strings.

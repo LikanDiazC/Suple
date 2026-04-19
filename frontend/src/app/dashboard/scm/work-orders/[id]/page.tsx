@@ -10,7 +10,7 @@ import {
   staggerContainer,
   staggerItem,
 } from '../../../../../presentation/animations/variants';
-import type { WorkOrder, WorkOrderStatus, CuttingPlan } from '../../../../../types/scm';
+import type { WorkOrder, WorkOrderStatus, PlannedOffcut } from '../../../../../types/scm';
 
 // ---------------------------------------------------------------------------
 // Status badge config
@@ -119,6 +119,245 @@ function OptimizeButton({
       )}
       {isLoading ? 'Optimizando...' : 'Optimizar Corte'}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal animation variants
+// ---------------------------------------------------------------------------
+
+const modalOverlayVariants = {
+  hidden:   { opacity: 0 },
+  visible:  { opacity: 1, transition: { duration: 0.18 } },
+  exit:     { opacity: 0, transition: { duration: 0.15 } },
+};
+
+const modalCardVariants = {
+  hidden:   { opacity: 0, scale: 0.96, y: 8 },
+  visible:  { opacity: 1, scale: 1, y: 0, transition: { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] } },
+  exit:     { opacity: 0, scale: 0.96, y: 4, transition: { duration: 0.15 } },
+};
+
+// ---------------------------------------------------------------------------
+// OffcutsModal
+// ---------------------------------------------------------------------------
+
+interface OffcutsModalOffcut extends PlannedOffcut {
+  /** The boardId the offcut came from, for traceability */
+  sourceBoardId?: string;
+}
+
+interface OffcutsModalProps {
+  workOrderId: string;
+  offcuts: OffcutsModalOffcut[];
+  onClose: () => void;
+  onSaved: (count: number) => void;
+}
+
+function OffcutsModal({ workOrderId, offcuts, onClose, onSaved }: OffcutsModalProps) {
+  const [selected, setSelected] = useState<boolean[]>(() => offcuts.map(() => true));
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const toggleAll = (checked: boolean) => setSelected(offcuts.map(() => checked));
+  const toggle = (i: number) => setSelected((prev) => prev.map((v, idx) => idx === i ? !v : v));
+  const selectedCount = selected.filter(Boolean).length;
+
+  const handleSave = async () => {
+    const toSave = offcuts.filter((_, i) => selected[i]);
+    if (toSave.length === 0) { onClose(); return; }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/scm/work-orders/${workOrderId}/confirm-offcuts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offcuts: toSave.map((o) => ({
+            widthMm:      o.widthMm,
+            heightMm:     o.heightMm,
+            thicknessMm:  o.thicknessMm,
+            materialSku:  o.materialSku,
+            sourceBoardId: o.sourceBoardId,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `Error ${res.status}`);
+      }
+      const data: { saved: number } = await res.json();
+      onSaved(data.saved ?? toSave.length);
+    } catch (err) {
+      setSaveError((err as Error).message ?? 'Error al guardar retazos');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="offcuts-overlay"
+        variants={modalOverlayVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <motion.div
+          key="offcuts-card"
+          variants={modalCardVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="w-full max-w-lg rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary-600">
+                  <rect x="2" y="2" width="12" height="12" rx="2" />
+                  <path d="M5 8h6M5 5h6M5 11h3" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-800">Guardar retazos al inventario</h2>
+                <p className="text-xs text-neutral-400">{offcuts.length} retazo{offcuts.length !== 1 ? 's' : ''} generado{offcuts.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M11 3L3 11M3 3l8 8" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Select-all row */}
+          <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-2.5 bg-neutral-50">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-primary-500 cursor-pointer"
+                checked={selectedCount === offcuts.length}
+                ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && selectedCount < offcuts.length; }}
+                onChange={(e) => toggleAll(e.target.checked)}
+              />
+              <span className="text-xs font-medium text-neutral-600">Seleccionar todos</span>
+            </label>
+            <span className="text-xs text-neutral-400">{selectedCount} de {offcuts.length} seleccionados</span>
+          </div>
+
+          {/* Offcut list */}
+          <div className="max-h-72 overflow-y-auto divide-y divide-neutral-100 px-5">
+            {offcuts.map((offcut, i) => (
+              <label
+                key={i}
+                className="flex items-center gap-3 py-3 cursor-pointer group"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 flex-shrink-0 accent-primary-500 cursor-pointer"
+                  checked={selected[i]}
+                  onChange={() => toggle(i)}
+                />
+                <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-neutral-700 truncate">
+                      <span className="font-mono">{offcut.widthMm} × {offcut.heightMm} mm</span>
+                    </p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {offcut.materialSku}
+                      {offcut.thicknessMm ? ` · ${offcut.thicknessMm} mm esp.` : ''}
+                    </p>
+                  </div>
+                  {/* Area chip */}
+                  <span className="flex-shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                    {((offcut.widthMm * offcut.heightMm) / 1_000_000).toFixed(3)} m²
+                  </span>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {/* Error */}
+          {saveError && (
+            <div className="mx-5 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-xs text-red-600">{saveError}</p>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-4 gap-3">
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-50"
+            >
+              Descartar todos
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || selectedCount === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                  </svg>
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 3L4.5 8.5 2 6" />
+                  </svg>
+                  Guardar seleccionados ({selectedCount})
+                </>
+              )}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Toast notification
+// ---------------------------------------------------------------------------
+
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3500);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="toast"
+        initial={{ opacity: 0, y: 16, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.22 } }}
+        exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
+        className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2.5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 shadow-lg"
+      >
+        <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-green-100">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+            <path d="M10 3L4.5 8.5 2 6" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-green-800">{message}</p>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -309,6 +548,11 @@ export default function WorkOrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
+  // Offcuts confirmation modal
+  const [pendingOffcuts, setPendingOffcuts] = useState<Array<PlannedOffcut & { sourceBoardId?: string }> | null>(null);
+  // Toast
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   // Keep a ref to the auto-refresh interval so we can clear it
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -356,8 +600,24 @@ export default function WorkOrderDetailPage() {
   const handleOptimize = async () => {
     setIsOptimizing(true);
     try {
-      await fetch(`/api/scm/work-orders/${id}/optimize`, { method: 'POST' });
+      const res = await fetch(`/api/scm/work-orders/${id}/optimize`, { method: 'POST' });
+      const updated: WorkOrder | null = res.ok ? await res.json().catch(() => null) : null;
       await fetchWorkOrder();
+
+      // Collect all PlannedOffcuts from the cutting plan returned by the optimize call
+      if (updated?.cuttingPlan?.boardAllocations) {
+        const allOffcuts: Array<PlannedOffcut & { sourceBoardId?: string }> = [];
+        for (const allocation of updated.cuttingPlan.boardAllocations) {
+          for (const offcut of allocation.offcuts ?? []) {
+            if (offcut.widthMm > 0 && offcut.heightMm > 0) {
+              allOffcuts.push({ ...offcut, sourceBoardId: allocation.stockId });
+            }
+          }
+        }
+        if (allOffcuts.length > 0) {
+          setPendingOffcuts(allOffcuts);
+        }
+      }
     } catch {
       // ignore, just refetch
       await fetchWorkOrder();
@@ -686,6 +946,24 @@ export default function WorkOrderDetailPage() {
           </div>
         ) : null}
       </motion.div>
+
+      {/* Offcuts confirmation modal */}
+      {pendingOffcuts && pendingOffcuts.length > 0 && (
+        <OffcutsModal
+          workOrderId={id}
+          offcuts={pendingOffcuts}
+          onClose={() => setPendingOffcuts(null)}
+          onSaved={(count) => {
+            setPendingOffcuts(null);
+            setToastMessage(`${count} retazo${count !== 1 ? 's' : ''} guardado${count !== 1 ? 's' : ''} al inventario`);
+          }}
+        />
+      )}
+
+      {/* Toast */}
+      {toastMessage && (
+        <Toast message={toastMessage} onDone={() => setToastMessage(null)} />
+      )}
     </>
   );
 }

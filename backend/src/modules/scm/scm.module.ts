@@ -1,39 +1,29 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { BOARD_REPOSITORY }      from './domain/repositories/IBoardRepository';
 import { OFFCUT_REPOSITORY }     from './domain/repositories/IOffcutRepository';
 import { WORK_ORDER_REPOSITORY } from './domain/repositories/IWorkOrderRepository';
 import { CUTTING_ENGINE_PORT }   from './domain/ports/ICuttingEnginePort';
-import { InMemoryBoardRepository }     from './infrastructure/repositories/InMemoryBoardRepository';
-import { InMemoryOffcutRepository }    from './infrastructure/repositories/InMemoryOffcutRepository';
-import { InMemoryWorkOrderRepository } from './infrastructure/repositories/InMemoryWorkOrderRepository';
-import { HttpCuttingEngineAdapter }    from './infrastructure/clients/HttpCuttingEngineAdapter';
+import { BoardOrmEntity }     from './infrastructure/persistence/BoardOrmEntity';
+import { OffcutOrmEntity }    from './infrastructure/persistence/OffcutOrmEntity';
+import { WorkOrderOrmEntity } from './infrastructure/persistence/WorkOrderOrmEntity';
+import { TypeOrmBoardRepository }     from './infrastructure/persistence/TypeOrmBoardRepository';
+import { TypeOrmOffcutRepository }    from './infrastructure/persistence/TypeOrmOffcutRepository';
+import { TypeOrmWorkOrderRepository } from './infrastructure/persistence/TypeOrmWorkOrderRepository';
+import { HttpCuttingEngineAdapter }   from './infrastructure/clients/HttpCuttingEngineAdapter';
 import { ExecuteCuttingOptimizationUseCase } from './application/use-cases/ExecuteCuttingOptimization';
 import { ScmController } from './presentation/controllers/ScmController';
 
 @Module({
+  imports: [TypeOrmModule.forFeature([BoardOrmEntity, OffcutOrmEntity, WorkOrderOrmEntity])],
   controllers: [ScmController],
   providers: [
-    // ── Repositories (swap InMemory → TypeORM in production) ─────────────────
-    { provide: BOARD_REPOSITORY,      useClass: InMemoryBoardRepository },
-    { provide: OFFCUT_REPOSITORY,     useClass: InMemoryOffcutRepository },
-    { provide: WORK_ORDER_REPOSITORY, useClass: InMemoryWorkOrderRepository },
-
-    // ── Cutting Engine Port ───────────────────────────────────────────────────
-    // Swap to a MockCuttingEngineAdapter when CUTTING_ENGINE_URL is not set (CI/CD)
-    {
-      provide:    CUTTING_ENGINE_PORT,
-      useFactory: () => new HttpCuttingEngineAdapter(),
-    },
-
-    // ── Use Cases ─────────────────────────────────────────────────────────────
-    // EventBus is injected automatically via @Global() InfrastructureModule
+    { provide: BOARD_REPOSITORY,      useClass: TypeOrmBoardRepository },
+    { provide: OFFCUT_REPOSITORY,     useClass: TypeOrmOffcutRepository },
+    { provide: WORK_ORDER_REPOSITORY, useClass: TypeOrmWorkOrderRepository },
+    { provide: CUTTING_ENGINE_PORT, useFactory: () => new HttpCuttingEngineAdapter() },
     ExecuteCuttingOptimizationUseCase,
   ],
-  exports: [
-    ExecuteCuttingOptimizationUseCase,
-    BOARD_REPOSITORY,
-    OFFCUT_REPOSITORY,
-    WORK_ORDER_REPOSITORY,
-  ],
+  exports: [ExecuteCuttingOptimizationUseCase, BOARD_REPOSITORY, OFFCUT_REPOSITORY, WORK_ORDER_REPOSITORY],
 })
 export class ScmModule {}

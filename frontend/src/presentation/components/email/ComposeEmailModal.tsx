@@ -16,25 +16,33 @@ export default function ComposeEmailModal() {
   const [minimized, setMinimized] = useState(false);
   const [sending, setSending]     = useState(false);
   const [sent, setSent]           = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const toRef = useRef<HTMLInputElement>(null);
 
   if (!isComposeOpen) return null;
 
   const handleSend = async () => {
+    setSendError(null);
     if (!composeData.to.trim()) {
       toRef.current?.focus();
       return;
     }
     setSending(true);
     try {
-      await sendEmail({ ...composeData, from: user.email });
+      const result = await sendEmail();
+      if (!result.ok) {
+        setSendError(result.error ?? 'No se pudo enviar el correo');
+        setSending(false);
+        return;
+      }
       setSent(true);
       setTimeout(() => {
         setSent(false);
         setSending(false);
         closeCompose();
       }, 1200);
-    } catch {
+    } catch (err) {
+      setSendError((err as Error).message ?? 'Error inesperado');
       setSending(false);
     }
   };
@@ -126,6 +134,13 @@ export default function ComposeEmailModal() {
               placeholder="Escribe tu mensaje aquí..."
               className="flex-1 resize-none px-4 py-3 text-sm text-neutral-800 outline-none placeholder:text-neutral-400 bg-transparent min-h-[200px]"
             />
+
+            {/* Error */}
+            {sendError && (
+              <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+                {sendError}
+              </div>
+            )}
 
             {/* Toolbar */}
             <div className="flex items-center justify-between border-t border-neutral-100 px-4 py-3 bg-neutral-50 flex-shrink-0">

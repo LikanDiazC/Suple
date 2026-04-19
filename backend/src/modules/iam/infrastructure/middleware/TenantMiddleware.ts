@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
+import { TenantContext } from '../../../../shared/infrastructure/TenantContext';
 
 /**
  * ==========================================================================
@@ -60,7 +61,8 @@ export class TenantMiddleware implements NestMiddleware {
   private readonly JWT_SECRET: string;
   private readonly EXPECTED_ISSUER: string;
   private readonly EXPECTED_AUDIENCE: string;
-  private readonly TENANT_ID_PATTERN = /^tnt_[a-zA-Z0-9]{8,64}$/;
+  // UUID v1-v5
+  private readonly TENANT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   constructor() {
     this.JWT_SECRET = this.requireEnv('JWT_SECRET');
@@ -121,7 +123,18 @@ export class TenantMiddleware implements NestMiddleware {
     });
 
     req.authenticatedUser = authenticatedUser;
-    next();
+
+    // Bind the tenant to AsyncLocalStorage so the TenantRlsSubscriber
+    // injects `app.current_tenant` into every TypeORM transaction
+    // started inside this request.
+    TenantContext.run(
+      {
+        tenantId: authenticatedUser.tenantId,
+        userId: authenticatedUser.userId,
+        roles: [...authenticatedUser.roles],
+      },
+      () => next(),
+    );
   }
 
   private requireEnv(key: string): string {

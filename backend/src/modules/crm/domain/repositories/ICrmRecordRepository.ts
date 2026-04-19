@@ -27,6 +27,8 @@ export interface CrmRecordListQuery {
   sortOrder: 'asc' | 'desc';
   search?: string;
   filters?: Record<string, string>;
+  /** Filter to only these record IDs (for "Mis contactos" tab) */
+  ids?: string[];
 }
 
 export interface CrmRecordListResult {
@@ -58,6 +60,12 @@ export interface ICrmRecordRepository {
 
   /** Hard-delete a record (admin only) */
   delete(tenantId: string, recordId: string): Promise<void>;
+
+  /**
+   * Find all active contacts whose email ends with `@{domain}`.
+   * Used for label propagation from a company to its contacts.
+   */
+  findContactsByEmailDomain(tenantId: string, domain: string): Promise<CrmRecord[]>;
 
   /**
    * AUDIT FIX #3: Optimized candidate pre-filtering for dedup.

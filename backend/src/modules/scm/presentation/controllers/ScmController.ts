@@ -25,6 +25,7 @@ import { Board } from '../../domain/entities/Board';
 import { Offcut } from '../../domain/entities/Offcut';
 import { MaterialSku } from '../../domain/value-objects/MaterialSku';
 import { Dimensions } from '../../domain/value-objects/Dimensions';
+import { Thickness } from '../../domain/value-objects/Thickness';
 import { UniqueId } from '../../../../shared/kernel';
 
 import { resolveTenantId } from '../../../../shared/helpers/resolveTenantId';
@@ -254,6 +255,90 @@ export class ScmController {
     // Re-fetch to return updated state
     const wo = await this.workOrderRepo.findById(tenantId, id);
     return wo ? serializeWorkOrder(wo) : { workOrderId: id, status: 'OPTIMIZING' };
+  }
+
+  // ── Confirm Offcuts ─────────────────────────────────────────────────────────
+
+  /**
+   * POST work-orders/:id/confirm-offcuts
+   *
+   * Saves the selected planned offcuts from a completed cutting plan back
+   * into the offcut inventory. The client sends only the offcuts the operator
+   * chose to save (may be all or a subset).
+   *
+   * Body: { offcuts: Array<{ widthMm, heightMm, thicknessMm, materialSku, sourceBoardId? }> }
+   * Returns: { saved: number, offcuts: SerializedOffcut[] }
+   */
+  @Post('work-orders/:id/confirm-offcuts')
+  @HttpCode(HttpStatus.OK)
+  async confirmOffcuts(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: {
+      offcuts: Array<{
+        widthMm:     number;
+        heightMm:    number;
+        thicknessMm: number;
+        materialSku: string;
+        sourceBoardId?: string;
+      }>;
+    },
+  ) {
+    const tenantId = resolveTenantId(req);
+
+    const wo = await this.workOrderRepo.findById(tenantId, id);
+    if (!wo) throw new NotFoundException(`WorkOrder ${id} not found`);
+
+    if (!Array.isArray(body.offcuts) || body.offcuts.length === 0) {
+      return { saved: 0, offcuts: [] };
+    }
+
+    const created: Offcut[] = [];
+
+    for (const raw of body.offcuts) {
+      const skuResult = MaterialSku.create(raw.materialSku);
+      if (skuResult.isFail()) {
+        this.logger.warn(`confirm-offcuts: invalid materialSku "${raw.materialSku}", skipping`);
+        continue;
+      }
+
+      const dimResult = Dimensions.create(raw.widthMm, raw.heightMm);
+      if (dimResult.isFail()) {
+        this.logger.warn(`confirm-offcuts: invalid dimensions ${raw.widthMm}x${raw.heightMm}, skipping`);
+        continue;
+      }
+
+      const thickResult = Thickness.create(raw.thicknessMm ?? 18);
+      if (thickResult.isFail()) {
+        this.logger.warn(`confirm-offcuts: invalid thickness ${raw.thicknessMm}, skipping`);
+        continue;
+      }
+
+      const offcutResult = Offcut.create(tenantId, {
+        materialSku:       skuResult.value,
+        thickness:         thickResult.value,
+        dimensions:        dimResult.value,
+        sourceBoardId:     raw.sourceBoardId ?? id,
+        sourceWorkOrderId: id,
+      });
+
+      if (offcutResult.isFail()) {
+        this.logger.warn(`confirm-offcuts: ${offcutResult.error}, skipping`);
+        continue;
+      }
+
+      created.push(offcutResult.value);
+    }
+
+    if (created.length > 0) {
+      await this.offcutRepo.saveMany(created);
+      this.logger.log(`confirm-offcuts: saved ${created.length} offcuts for WO ${id} (tenant: ${tenantId})`);
+    }
+
+    return {
+      saved:   created.length,
+      offcuts: created.map(serializeOffcut),
+    };
   }
 
   // ── Inventory ───────────────────────────────────────────────────────────────

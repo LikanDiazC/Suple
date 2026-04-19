@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pageTransition } from '../../../../presentation/animations/variants';
 import { useCurrency, M } from '../../../../application/context/currency/CurrencyContext';
@@ -36,6 +36,84 @@ const STAGES: { key: Stage; label: string; accent: string; headerBg: string; dot
 ];
 
 const INITIAL_DEALS: Deal[] = [];
+
+// Map backend stage/lifecycle values → Kanban column keys
+const STAGE_MAP: Record<string, Stage> = {
+  prospecto:        'prospecto',
+  lead:             'prospecto',
+  new:              'prospecto',
+  calificado:       'calificado',
+  qualified:        'calificado',
+  salesqualified:   'calificado',
+  marketingqualified: 'calificado',
+  propuesta:        'propuesta',
+  proposal:         'propuesta',
+  presentationscheduled: 'propuesta',
+  negociacion:      'negociacion',
+  negociación:      'negociacion',
+  negotiation:      'negociacion',
+  decisionmakerboughtin: 'negociacion',
+  contractsent:     'negociacion',
+  cerrado:          'cerrado_ganado',
+  cerrado_ganado:   'cerrado_ganado',
+  closedwon:        'cerrado_ganado',
+  won:              'cerrado_ganado',
+  perdido:          'cerrado_perdido',
+  cerrado_perdido:  'cerrado_perdido',
+  closedlost:       'cerrado_perdido',
+  lost:             'cerrado_perdido',
+};
+
+const COMPANY_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-orange-500',
+  'bg-rose-500',   'bg-indigo-500', 'bg-teal-500',  'bg-amber-500',
+];
+
+const OWNER_COLORS = [
+  'from-violet-400 to-purple-600', 'from-blue-400 to-indigo-600',
+  'from-emerald-400 to-teal-600',  'from-orange-400 to-red-600',
+];
+
+function pickColor(seed: string, palette: string[]): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+
+interface BackendDeal {
+  id: string;
+  displayName: string;
+  properties: Record<string, unknown>;
+}
+
+function mapBackendDeal(r: BackendDeal): Deal {
+  const p = r.properties;
+  const rawStage = (
+    (p['stage'] as string) ||
+    (p['deal_stage'] as string) ||
+    (p['lifecycle_stage'] as string) ||
+    ''
+  ).toLowerCase().replace(/[\s_-]/g, '');
+  const stage: Stage = STAGE_MAP[rawStage] ?? 'prospecto';
+
+  const company = (p['company'] as string) || (p['domain'] as string) || '—';
+  const owner   = (p['owner'] as string)   || (p['owner_id'] as string) || '—';
+
+  return {
+    id:          r.id,
+    name:        (p['deal_name'] as string) || r.displayName || 'Sin nombre',
+    company,
+    companyColor: pickColor(company, COMPANY_COLORS),
+    value:       Number(p['value'] ?? p['amount'] ?? 0),
+    probability: Number(p['probability'] ?? 0),
+    stage,
+    owner,
+    ownerColor:  pickColor(owner, OWNER_COLORS),
+    closeDate:   (p['close_date'] as string) || new Date().toISOString(),
+    source:      (p['source'] as string) || (p['lead_source'] as string) || '—',
+    notes:       (p['notes'] as string) || (p['description'] as string) || undefined,
+  };
+}
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
@@ -147,6 +225,242 @@ function DealCard({ deal, onMoveStage, onSelect }: DealCardProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Activity Section
+// ---------------------------------------------------------------------------
+
+type ActivityType = 'NOTE' | 'CALL' | 'MEETING';
+
+interface Activity {
+  id: string;
+  type: ActivityType;
+  description: string;
+  date: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+const ACTIVITY_ICONS: Record<ActivityType, string> = {
+  NOTE: '📝',
+  CALL: '📞',
+  MEETING: '🤝',
+};
+
+const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  NOTE: 'Nota',
+  CALL: 'Llamada',
+  MEETING: 'Reunión',
+};
+
+const TODAY = new Date().toISOString().slice(0, 10);
+
+interface AiSummaryResult {
+  summary: string;
+  generatedAt: string;
+}
+
+function ActivitySection({ dealId }: { dealId: string }) {
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [type, setType] = useState<ActivityType>('NOTE');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(TODAY);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // AI Summary state
+  const [aiSummary, setAiSummary] = useState<AiSummaryResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const fetchActivities = useCallback(() => {
+    setLoadingList(true);
+    fetch(`/api/crm/deals/${dealId}/activities`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then((data: { results: Activity[] }) => setActivities(data.results ?? []))
+      .catch(err => console.error('[ActivitySection] fetch failed:', err))
+      .finally(() => setLoadingList(false));
+  }, [dealId]);
+
+  useEffect(() => { fetchActivities(); }, [fetchActivities]);
+
+  const handleAiSummary = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch(`/api/crm/deals/${dealId}/ai-summary`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAiError((data as { error?: string }).error ?? 'Error al generar resumen');
+        return;
+      }
+      const data = await res.json() as AiSummaryResult;
+      setAiSummary(data);
+    } catch {
+      setAiError('Error de conexión');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!description.trim()) { setError('La descripción es requerida'); return; }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/crm/deals/${dealId}/activities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, description: description.trim(), date }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error ?? 'Error al registrar actividad');
+        return;
+      }
+      setDescription('');
+      setDate(TODAY);
+      setType('NOTE');
+      fetchActivities();
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fmtActivityDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <div className="rounded-xl bg-neutral-50 p-4 space-y-4">
+      {/* Section header + AI button */}
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-semibold">Actividad</p>
+        <button
+          type="button"
+          onClick={handleAiSummary}
+          disabled={aiLoading}
+          className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+        >
+          {aiLoading ? (
+            <>
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600 inline-block" />
+              Generando resumen...
+            </>
+          ) : (
+            <>✨ Resumen IA</>
+          )}
+        </button>
+      </div>
+
+      {/* AI Summary result */}
+      {aiError && (
+        <p className="text-xs text-red-500">{aiError}</p>
+      )}
+      {aiSummary && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <p className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wider mb-2">✨ Resumen generado por IA</p>
+          <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-wrap">{aiSummary.summary}</p>
+          <div className="mt-3 flex items-center justify-between">
+            {aiSummary.generatedAt && (
+              <p className="text-[10px] text-indigo-400">
+                Generado: {new Date(aiSummary.generatedAt).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleAiSummary}
+              disabled={aiLoading}
+              className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors disabled:opacity-50"
+            >
+              Regenerar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Activity list */}
+      <div className="space-y-2">
+        {loadingList ? (
+          <div className="flex justify-center py-4">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500" />
+          </div>
+        ) : activities.length === 0 ? (
+          <p className="text-center text-xs text-neutral-400 py-4">Sin actividad registrada aún</p>
+        ) : (
+          activities.map(a => (
+            <div key={a.id} className="flex gap-3 rounded-xl bg-white border border-neutral-100 p-3 shadow-sm">
+              <span className="text-base leading-none mt-0.5">{ACTIVITY_ICONS[a.type]}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wide">{ACTIVITY_LABELS[a.type]}</span>
+                  <span className="text-[10px] text-neutral-400 shrink-0">{fmtActivityDate(a.date)}</span>
+                </div>
+                <p className="text-sm text-neutral-700 leading-snug break-words">{a.description}</p>
+                {a.created_by && (
+                  <p className="text-[10px] text-neutral-400 mt-1">{a.created_by}</p>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Log form */}
+      <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+        <p className="text-[10px] text-neutral-400 uppercase tracking-wider">Registrar actividad</p>
+
+        {/* Type segmented control */}
+        <div className="flex rounded-lg border border-neutral-200 overflow-hidden bg-white text-xs font-semibold">
+          {(['NOTE', 'CALL', 'MEETING'] as ActivityType[]).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              className={`flex-1 py-1.5 transition-colors ${
+                type === t ? 'bg-primary-500 text-white' : 'text-neutral-500 hover:bg-neutral-50'
+              }`}
+            >
+              {ACTIVITY_ICONS[t]} {ACTIVITY_LABELS[t]}
+            </button>
+          ))}
+        </div>
+
+        {/* Description */}
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="Descripción..."
+          rows={3}
+          required
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder-neutral-300 resize-none focus:outline-none focus:ring-2 focus:ring-primary-300"
+        />
+
+        {/* Date */}
+        <input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          required
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-300"
+        />
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-lg bg-primary-500 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+        >
+          {submitting ? 'Registrando…' : 'Registrar'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Detail Panel
 // ---------------------------------------------------------------------------
 
@@ -225,6 +539,9 @@ function DealDetailPanel({ deal, onClose, onMoveStage }: { deal: Deal; onClose: 
           </div>
         )}
 
+        {/* Activity log */}
+        <ActivitySection dealId={deal.id} />
+
         {/* Move stage */}
         <div>
           <p className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2">Cambiar etapa</p>
@@ -265,10 +582,46 @@ function DealDetailPanel({ deal, onClose, onMoveStage }: { deal: Deal; onClose: 
 // Page
 // ---------------------------------------------------------------------------
 
+interface NewDealForm {
+  deal_name: string;
+  company: string;
+  value: string;
+  probability: string;
+  close_date: string;
+  stage: Stage;
+}
+
+const EMPTY_FORM: NewDealForm = {
+  deal_name: '',
+  company: '',
+  value: '',
+  probability: '50',
+  close_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+  stage: 'prospecto',
+};
+
 export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
+  const [loading, setLoading] = useState(true);
   const [ownerFilter, setOwnerFilter] = useState('Todos');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [newDealForm, setNewDealForm] = useState<NewDealForm>(EMPTY_FORM);
+  const [savingDeal, setSavingDeal] = useState(false);
+  const [newDealError, setNewDealError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch('/api/crm/deals?limit=200')
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then((data: { results: BackendDeal[] }) => {
+        if (!cancelled) setDeals((data.results ?? []).map(mapBackendDeal));
+      })
+      .catch(err => console.error('[DealsPage] fetch failed:', err))
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() =>
     ownerFilter === 'Todos' ? deals : deals.filter(d => d.owner === ownerFilter),
@@ -278,6 +631,38 @@ export default function DealsPage() {
   const moveStage = (id: string, newStage: Stage) => {
     setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage } : d));
     if (selectedDeal?.id === id) setSelectedDeal(prev => prev ? { ...prev, stage: newStage } : null);
+  };
+
+  const handleCreateDeal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDealForm.deal_name.trim()) { setNewDealError('El nombre es requerido'); return; }
+    setSavingDeal(true);
+    setNewDealError(null);
+    try {
+      const res = await fetch('/api/crm/deals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          properties: {
+            deal_name:   { value: newDealForm.deal_name.trim() },
+            company:     { value: newDealForm.company.trim() },
+            value:       { value: parseFloat(newDealForm.value) || 0 },
+            probability: { value: parseInt(newDealForm.probability) || 50 },
+            close_date:  { value: newDealForm.close_date },
+            stage:       { value: newDealForm.stage },
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const created: BackendDeal = await res.json();
+      setDeals(prev => [mapBackendDeal(created), ...prev]);
+      setShowNewDeal(false);
+      setNewDealForm(EMPTY_FORM);
+    } catch (err: unknown) {
+      setNewDealError(err instanceof Error ? err.message : 'Error al crear deal');
+    } finally {
+      setSavingDeal(false);
+    }
   };
 
   // Summary KPIs
@@ -327,7 +712,10 @@ export default function DealsPage() {
                 </button>
               ))}
             </div>
-            <button className="flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600 transition-colors">
+            <button
+              onClick={() => { setShowNewDeal(true); setNewDealError(null); }}
+              className="flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600 transition-colors"
+            >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 1v10M1 6h10"/></svg>
               Nuevo deal
             </button>
@@ -336,6 +724,12 @@ export default function DealsPage() {
 
         {/* Kanban Board (horizontal scroll) */}
         <div className="flex-1 overflow-x-auto min-h-0 px-6 pb-6">
+        {loading && (
+          <div className="flex h-full items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+          </div>
+        )}
+        {!loading && <>
           <div className="flex gap-4 h-full min-w-max">
             {STAGES.map(stage => {
               const stageDeals = filtered.filter(d => d.stage === stage.key);
@@ -378,8 +772,103 @@ export default function DealsPage() {
               );
             })}
           </div>
+        </>}
         </div>
       </motion.div>
+
+      {/* New Deal Modal */}
+      <AnimatePresence>
+        {showNewDeal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+            onClick={() => setShowNewDeal(false)}
+          >
+            <motion.form
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              onSubmit={handleCreateDeal}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-neutral-900">Nuevo deal</h2>
+                <button type="button" onClick={() => setShowNewDeal(false)} className="text-neutral-400 hover:text-neutral-600">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  required
+                  placeholder="Nombre del deal *"
+                  value={newDealForm.deal_name}
+                  onChange={e => setNewDealForm(p => ({ ...p, deal_name: e.target.value }))}
+                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100"
+                />
+                <input
+                  placeholder="Empresa"
+                  value={newDealForm.company}
+                  onChange={e => setNewDealForm(p => ({ ...p, company: e.target.value }))}
+                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Valor ($)"
+                    value={newDealForm.value}
+                    onChange={e => setNewDealForm(p => ({ ...p, value: e.target.value }))}
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="Probabilidad %"
+                    value={newDealForm.probability}
+                    onChange={e => setNewDealForm(p => ({ ...p, probability: e.target.value }))}
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={newDealForm.stage}
+                    onChange={e => setNewDealForm(p => ({ ...p, stage: e.target.value as Stage }))}
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100 bg-white"
+                  >
+                    {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                  <input
+                    type="date"
+                    value={newDealForm.close_date}
+                    onChange={e => setNewDealForm(p => ({ ...p, close_date: e.target.value }))}
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100"
+                  />
+                </div>
+              </div>
+
+              {newDealError && <p className="text-xs text-red-500">{newDealError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={savingDeal}
+                  className="flex-1 rounded-lg bg-primary-500 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+                >
+                  {savingDeal ? 'Guardando…' : 'Crear deal'}
+                </button>
+                <button type="button" onClick={() => setShowNewDeal(false)} className="rounded-lg border border-neutral-200 px-4 py-2.5 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Detail panel overlay */}
       <AnimatePresence>

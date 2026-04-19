@@ -1,103 +1,101 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { SessionProvider, useSession, signIn, signOut } from 'next-auth/react';
-import type { Session } from 'next-auth';
-import { clearDemoMode, isDemoClient } from '@/lib/demoMode';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 interface AuthUser {
-  name: string | null | undefined;
-  email: string | null | undefined;
-  image: string | null | undefined;
+  id: string;
+  email: string;
+  fullName: string;
+  tenantId: string;
+  roles: string[];
 }
 
 interface AuthContextValue {
-  session: Session | null;
-  status: 'loading' | 'authenticated' | 'unauthenticated';
   user: AuthUser | null;
-  signIn: typeof signIn;
-  signOut: typeof signOut;
+  status: 'loading' | 'authenticated' | 'unauthenticated';
   isAuthenticated: boolean;
   isLoading: boolean;
-  /** True when running in demo mode (static data only, no APIs). */
-  isDemoMode: boolean;
+  signIn: (email: string, password: string) => Promise<{ ok: boolean; mustChangePassword?: boolean; error?: string }>;
+  signOut: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function AuthContextProvider({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
-  const [demoUser, setDemoUser] = useState<AuthUser | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { cache: 'no-store' });
+      if (res.ok) {
+        const u = (await res.json()) as AuthUser;
+        setUser(u);
+        setStatus('authenticated');
+      } else {
+        setUser(null);
+        setStatus('unauthenticated');
+      }
+    } catch {
+      setUser(null);
+      setStatus('unauthenticated');
+    }
+  }, []);
 
   useEffect(() => {
-    // ── Mutual exclusivity ──────────────────────────────────────────────
-    // If the user has a real session, demo mode must be cleared so
-    // the two never coexist.
-    if (session?.user) {
-      if (isDemoClient()) {
-        clearDemoMode();
-      }
-      setDemoUser(null);
-      return;
+    void refresh();
+  }, [refresh]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Login failed' }));
+      return { ok: false, error: err.error ?? 'Login failed' };
     }
+    const data = await res.json() as { mustChangePassword?: boolean };
+    await refresh();
+    return { ok: true, mustChangePassword: data.mustChangePassword ?? false };
+  }, [refresh]);
 
-    // No real session — check for demo mode
-    if (isDemoClient()) {
-      try {
-        const u = JSON.parse(localStorage.getItem('demo_user') || '{}');
-        setDemoUser({
-          name: u.name || 'Demo User',
-          email: u.email || 'demo@suple.cl',
-          image: null,
-        });
-      } catch {
-        setDemoUser({
-          name: 'Demo User',
-          email: 'demo@suple.cl',
-          image: null,
-        });
-      }
-    } else {
-      setDemoUser(null);
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Error al cambiar contraseña' }));
+      return { ok: false, error: err.error ?? 'Error al cambiar contraseña' };
     }
-  }, [session]);
+    return { ok: true };
+  }, []);
 
-  const isDemoMode = demoUser !== null;
-
-  const effectiveUser: AuthUser | null = session?.user
-    ? { name: session.user.name, email: session.user.email, image: session.user.image }
-    : demoUser;
+  const signOut = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setUser(null);
+    setStatus('unauthenticated');
+  }, []);
 
   const value: AuthContextValue = {
-    session,
-    status: isDemoMode ? 'authenticated' : status,
-    user: effectiveUser,
+    user,
+    status,
+    isAuthenticated: status === 'authenticated',
+    isLoading: status === 'loading',
     signIn,
-    signOut: async (options) => {
-      clearDemoMode();
-      setDemoUser(null);
-      return signOut(options);
-    },
-    isAuthenticated: status === 'authenticated' || isDemoMode,
-    isLoading: status === 'loading' && !isDemoMode,
-    isDemoMode,
+    signOut,
+    changePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <SessionProvider>
-      <AuthContextProvider>{children}</AuthContextProvider>
-    </SessionProvider>
-  );
-}
-
 export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 }

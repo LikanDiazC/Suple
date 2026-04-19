@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { staggerContainer, staggerItem } from '../../animations/variants';
 import { useCrmTable } from '../../../application/context/crm-table';
@@ -9,6 +9,172 @@ import ColumnManager from './ColumnManager';
 import QueryBuilder, { ActiveFilterChips } from './QueryBuilder';
 import ExportPanel from './ExportPanel';
 import RecordDetailPanel from './RecordDetailPanel';
+
+// ---------------------------------------------------------------------------
+// Label system — helpers and components
+// ---------------------------------------------------------------------------
+
+type RecordLabel = 'important' | 'common' | null;
+
+const LABEL_CONFIG = {
+  important: { dotClass: 'bg-red-500', badgeClass: 'bg-red-50 text-red-700 border-red-200', text: 'Importante' },
+  common:    { dotClass: 'bg-blue-500', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200', text: 'Cliente' },
+} as const;
+
+function getLabelFromRecord(record: CrmRecord): RecordLabel {
+  const rawLabel = record.properties['_label'];
+  // Handle legacy nested format { value: 'important' } from old saves
+  const raw = rawLabel && typeof rawLabel === 'object' && 'value' in (rawLabel as object)
+    ? (rawLabel as { value: unknown }).value
+    : rawLabel;
+  if (raw === 'important' || raw === 'common') return raw as RecordLabel;
+  return null;
+}
+
+interface PatchLabelResult {
+  propagatedTo?: number;
+}
+
+async function patchLabel(objectType: string, id: string, label: RecordLabel): Promise<PatchLabelResult> {
+  const res = await fetch(`/api/crm/${objectType}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ properties: { _label: label } }),
+  });
+  if (!res.ok) return {};
+  const data = await res.json().catch(() => ({}));
+  return { propagatedTo: typeof data.propagatedTo === 'number' ? data.propagatedTo : undefined };
+}
+
+function LabelBadge({ label }: { label: RecordLabel }) {
+  if (!label) return null;
+  const cfg = LABEL_CONFIG[label];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${cfg.badgeClass}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotClass}`} />
+      {cfg.text}
+    </span>
+  );
+}
+
+function LabelDropdown({
+  currentLabel,
+  objectType,
+  recordId,
+  onLabelChange,
+}: {
+  currentLabel: RecordLabel;
+  objectType: string;
+  recordId: string;
+  onLabelChange: (label: RecordLabel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [propagatedTo, setPropagatedTo] = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [open]);
+
+  // Auto-dismiss propagation toast after 3 seconds
+  useEffect(() => {
+    if (propagatedTo !== null) {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setPropagatedTo(null), 3000);
+    }
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, [propagatedTo]);
+
+  const select = async (label: RecordLabel) => {
+    setOpen(false);
+    setBusy(true);
+    try {
+      const result = await patchLabel(objectType, recordId, label);
+      onLabelChange(label);
+      if (objectType === 'companies' && typeof result.propagatedTo === 'number') {
+        setPropagatedTo(result.propagatedTo);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const options: { value: RecordLabel; text: string; dot?: string }[] = [
+    { value: 'important', text: 'Marcar como Importante', dot: 'bg-red-500' },
+    { value: 'common',    text: 'Marcar como Cliente',    dot: 'bg-blue-500' },
+    { value: null,        text: 'Sin etiqueta' },
+  ];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        disabled={busy}
+        title="Cambiar etiqueta"
+        className="rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors disabled:opacity-40"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M2 4h1.5L6 1.5 8.5 4H10a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
+          <circle cx="6" cy="6.5" r="1"/>
+        </svg>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute left-0 top-full mt-1 z-[70] w-48 rounded-lg border border-neutral-200 bg-white shadow-lg py-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {options.map((opt) => (
+              <button
+                key={String(opt.value)}
+                onClick={() => select(opt.value)}
+                className={`flex items-center gap-2 w-full px-3 py-2 text-xs text-left transition-colors hover:bg-neutral-50 ${
+                  currentLabel === opt.value ? 'font-semibold text-neutral-900' : 'text-neutral-700'
+                }`}
+              >
+                {opt.dot
+                  ? <span className={`h-2 w-2 rounded-full flex-shrink-0 ${opt.dot}`} />
+                  : <span className="h-2 w-2 rounded-full flex-shrink-0 border border-neutral-300" />
+                }
+                {opt.text}
+                {currentLabel === opt.value && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" className="ml-auto text-primary-500"><path d="M2 5l2.5 2.5 3.5-4"/></svg>
+                )}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {propagatedTo !== null && (
+          <motion.p
+            initial={{ opacity: 0, y: -2 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full mt-1 whitespace-nowrap text-[10px] text-neutral-400 pointer-events-none z-[60]"
+          >
+            Etiqueta propagada a {propagatedTo} {propagatedTo === 1 ? 'contacto' : 'contactos'}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 /**
  * ==========================================================================
@@ -261,8 +427,13 @@ export default function CrmTableView({ title, tabs, onAddRecord }: CrmTableViewP
               >
                 {tab.label}
                 {(() => {
+                  // Tab 0 = "Todos los ..." → show real total from paginated response
                   // Tab 1 = "Mis ..." → show myRecordIds count dynamically
-                  const count = i === 1 ? state.myRecordIds.size : tab.count;
+                  const count = i === 0
+                    ? state.pagination.total
+                    : i === 1
+                      ? state.myRecordIds.size
+                      : tab.count;
                   return count !== undefined ? (
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                       isActive ? 'bg-primary-100 text-primary-700' : 'bg-neutral-100 text-neutral-500'
@@ -528,6 +699,7 @@ export default function CrmTableView({ title, tabs, onAddRecord }: CrmTableViewP
           getDisplayName={getDisplayName}
           getInitials={getInitials}
           formatValue={formatValue}
+          objectType={state.objectType}
         />
       )}
 
@@ -567,12 +739,21 @@ export default function CrmTableView({ title, tabs, onAddRecord }: CrmTableViewP
 // Table View — extracted to avoid JSX nesting issues with SWC
 // ==========================================================================
 
-function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort, setSort, toggleSelectAll, toggleSelect, selectRecord, getDisplayName, getInitials, formatValue }: {
+function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort, setSort, toggleSelectAll, toggleSelect, selectRecord, getDisplayName, getInitials, formatValue, objectType }: {
   displayRecords: CrmRecord[]; loading: boolean; visibleColumns: { key: string; label: string; type: string; width?: string; sortable?: boolean }[];
   selectedIds: Set<string>; sort: { field: string; order: string }; setSort: (f: string) => void;
   toggleSelectAll: () => void; toggleSelect: (id: string) => void; selectRecord: (id: string) => void;
   getDisplayName: (r: CrmRecord) => string; getInitials: (r: CrmRecord) => string; formatValue: (v: string, t: string) => string;
+  objectType: string;
 }) {
+  // Optimistic label overrides: map recordId -> label
+  const [labelOverrides, setLabelOverrides] = useState<Record<string, RecordLabel>>({});
+
+  const getLabel = (record: CrmRecord): RecordLabel => {
+    if (record.id in labelOverrides) return labelOverrides[record.id];
+    return getLabelFromRecord(record);
+  };
+
   return (
     <div className="flex-1 overflow-auto bg-white">
       <motion.table variants={staggerContainer} initial="initial" animate="animate" className="w-full">
@@ -626,11 +807,13 @@ function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort,
                 </td>
               </tr>
             ) : (
-              displayRecords.map((record) => (
+              displayRecords.map((record) => {
+                const currentLabel = getLabel(record);
+                return (
                 <motion.tr
                   key={record.id}
                   variants={staggerItem}
-                  className={`border-b border-neutral-50 transition-colors cursor-pointer ${
+                  className={`group border-b border-neutral-50 transition-colors cursor-pointer ${
                     selectedIds.has(record.id) ? 'bg-primary-50' : 'hover:bg-neutral-50'
                   }`}
                 >
@@ -645,7 +828,7 @@ function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort,
                   {visibleColumns.map((col, colIdx) => (
                     <td key={col.key} className="px-4 py-3">
                       {colIdx === 0 ? (
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                           <RecordAvatar
                             initials={getInitials(record)}
                             email={record.properties['email']}
@@ -654,10 +837,19 @@ function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort,
                           />
                           <button
                             onClick={(e) => { e.stopPropagation(); selectRecord(record.id); }}
-                            className="text-sm font-medium text-primary-600 hover:underline truncate max-w-[200px] text-left"
+                            className="text-sm font-medium text-primary-600 hover:underline truncate max-w-[160px] text-left"
                           >
                             {col.key === 'name' || col.key === 'first_name' ? getDisplayName(record) : (record.properties[col.key] || '--')}
                           </button>
+                          {currentLabel && <LabelBadge label={currentLabel} />}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <LabelDropdown
+                              currentLabel={currentLabel}
+                              objectType={objectType}
+                              recordId={record.id}
+                              onLabelChange={(label) => setLabelOverrides((prev) => ({ ...prev, [record.id]: label }))}
+                            />
+                          </span>
                         </div>
                       ) : col.type === 'email' ? (
                         <a href={`mailto:${record.properties[col.key]}`} className="text-sm text-primary-600 hover:underline flex items-center gap-1 truncate max-w-[200px]">
@@ -682,7 +874,8 @@ function TableView({ displayRecords, loading, visibleColumns, selectedIds, sort,
                     </td>
                   ))}
                 </motion.tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </motion.table>

@@ -3,10 +3,15 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TenantMiddleware } from './modules/iam/infrastructure/middleware/TenantMiddleware';
 import { InfrastructureModule } from './infrastructure/InfrastructureModule';
+import { IamModule } from './modules/iam/iam.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { SiiModule } from './modules/sii/sii.module';
 import { ScmModule } from './modules/scm/scm.module';
 import { BpmsModule } from './modules/bpms/bpms.module';
+import { ErpModule } from './modules/erp/erp.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { GmailModule } from './modules/gmail/gmail.module';
 import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
 
 /**
@@ -44,13 +49,16 @@ import { IpThrottlerGuard } from './infrastructure/guards/IpThrottlerGuard';
     // -----------------------------------------------------------------------
     InfrastructureModule,
 
-    // Bounded context modules (DDD)
+    // Bounded context modules (DDD) — re-enabled per phase
+    IamModule,
     CrmModule,
-    SiiModule,
     ScmModule,
     BpmsModule,
-    // ERPModule,
-    // SCMModule,
+    ErpModule,
+    SiiModule,
+    MarketingModule,
+    AnalyticsModule,
+    GmailModule,
   ],
   providers: [
     // AUDIT FIX #2: Register IpThrottlerGuard globally via DI.
@@ -75,14 +83,8 @@ export class AppModule implements NestModule {
         '/auth/login',
         '/auth/sso/callback',
         '/auth/sso/metadata',
-        // Dev-mode: CRM API accessible without JWT (hardcoded tenant)
-        'api/crm/(.*)',
-        // SII auth is its own authentication domain (SII credentials, not app JWT)
-        'api/sii/(.*)',
-        // SCM: dev-mode, reads x-tenant-id header directly in ScmController
-        'api/scm/(.*)',
-        // BPMS: dev-mode, reads x-tenant-id header directly
-        'api/bpms/(.*)',
+        'api/gmail/tracking/(.*)',
+        'api/gmail/oauth/callback',
       )
       .forRoutes('*');
   }

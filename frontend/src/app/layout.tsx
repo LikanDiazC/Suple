@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '../application/context/auth/AuthContext';
+import { LocaleProvider } from '../application/context/locale/LocaleContext';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function RootLayout({
     <html lang="en" className="antialiased">
       <body className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
         <AuthProvider>
-          {children}
+          <LocaleProvider>
+            {children}
+          </LocaleProvider>
         </AuthProvider>
       </body>
     </html>

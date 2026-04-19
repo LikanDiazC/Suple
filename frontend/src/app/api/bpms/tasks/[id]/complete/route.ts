@@ -6,12 +6,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id } = await params;
-  const body = await req.json();
-  return proxyDynamicPost(
-    `/api/bpms/tasks/${id}/complete`,
-    body,
-    { success: true, outcome: body.outcome ?? null },
-    'BPMS',
-    req,
-  );
+  const body = await req.json().catch(() => ({}));
+  return proxyDynamicPost(`/api/bpms/tasks/${id}/complete`, body, req, 'BPMS');
 }

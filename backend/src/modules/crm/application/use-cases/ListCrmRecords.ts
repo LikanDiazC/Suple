@@ -35,7 +35,7 @@ export class ListCrmRecordsUseCase {
     objectType: string,
     query: ListCrmRecordsQueryDto,
   ): Promise<ListCrmRecordsResultDto> {
-    const { page = 1, limit = 25, sort = 'create_date', order = 'desc', search, ...filters } = query;
+    const { page = 1, limit = 25, sort = 'create_date', order = 'desc', search, _ids, ...filters } = query;
 
     const cleanFilters: Record<string, string> = {};
     for (const [key, value] of Object.entries(filters)) {
@@ -53,6 +53,7 @@ export class ListCrmRecordsUseCase {
       sortOrder: order,
       search: search || undefined,
       filters: Object.keys(cleanFilters).length > 0 ? cleanFilters : undefined,
+      ids: _ids ? _ids.split(',').filter(Boolean) : undefined,
     });
 
     return {

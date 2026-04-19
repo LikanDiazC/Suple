@@ -57,35 +57,6 @@ interface FacturaMock {
 }
 
 // ---------------------------------------------------------------------------
-// Mock SII Data (dev mode)
-// ---------------------------------------------------------------------------
-
-const MOCK_EMITIDAS: FacturaMock[] = [
-  { folio: 1001, tipo: 'Factura Afecta', fecha: '2026-04-02', razonSocial: 'UDLA Universidad', rut: '76.543.210-K', montoNeto: 2500000, iva: 475000, total: 2975000, estado: 'ACEPTADO' },
-  { folio: 1002, tipo: 'Factura Afecta', fecha: '2026-04-05', razonSocial: 'Fracttal SpA', rut: '77.123.456-3', montoNeto: 1800000, iva: 342000, total: 2142000, estado: 'ACEPTADO' },
-  { folio: 1003, tipo: 'Factura No Afecta', fecha: '2026-04-08', razonSocial: 'ICI Ingeniería', rut: '96.542.890-2', montoNeto: 900000, iva: 0, total: 900000, estado: 'ACEPTADO' },
-  { folio: 1004, tipo: 'Factura Afecta', fecha: '2026-04-10', razonSocial: 'Sodimac S.A.', rut: '82.331.000-7', montoNeto: 3400000, iva: 646000, total: 4046000, estado: 'ACEPTADO_CON_REPAROS' },
-  { folio: 1005, tipo: 'Factura Afecta', fecha: '2026-04-12', razonSocial: 'Cencosud Retail', rut: '79.221.445-1', montoNeto: 780000, iva: 148200, total: 928200, estado: 'ACEPTADO' },
-  { folio: 1006, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'AVEVA Group', rut: '98.123.567-0', montoNeto: 4200000, iva: 798000, total: 4998000, estado: 'PENDIENTE' },
-  { folio: 1007, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'Banco Estado', rut: '97.030.000-7', montoNeto: 1200000, iva: 228000, total: 1428000, estado: 'ACEPTADO' },
-  { folio: 1008, tipo: 'Nota de Crédito', fecha: '2026-04-13', razonSocial: 'Fracttal SpA', rut: '77.123.456-3', montoNeto: -450000, iva: -85500, total: -535500, estado: 'ACEPTADO' },
-];
-
-const MOCK_RECIBIDAS: FacturaMock[] = [
-  { folio: 50341, tipo: 'Factura Afecta', fecha: '2026-04-01', razonSocial: 'AWS Chile SpA', rut: '76.354.771-K', montoNeto: 1850000, iva: 351500, total: 2201500, estado: 'ACEPTADO' },
-  { folio: 83920, tipo: 'Factura Afecta', fecha: '2026-04-03', razonSocial: 'Oficinas Miraflores Ltda.', rut: '78.892.003-2', montoNeto: 650000, iva: 123500, total: 773500, estado: 'ACEPTADO' },
-  { folio: 12344, tipo: 'Factura Afecta', fecha: '2026-04-05', razonSocial: 'Suministros Oficina Chile', rut: '82.441.332-6', montoNeto: 280000, iva: 53200, total: 333200, estado: 'ACEPTADO' },
-  { folio: 93210, tipo: 'Factura Afecta', fecha: '2026-04-07', razonSocial: 'Telefónica Chile S.A.', rut: '96.929.840-8', montoNeto: 420000, iva: 79800, total: 499800, estado: 'ACEPTADO' },
-  { folio: 77001, tipo: 'Factura Afecta', fecha: '2026-04-10', razonSocial: 'Publicidad Digital SpA', rut: '76.123.890-3', montoNeto: 1200000, iva: 228000, total: 1428000, estado: 'ACEPTADO_CON_REPAROS' },
-  { folio: 44561, tipo: 'Factura No Afecta', fecha: '2026-04-11', razonSocial: 'Asesoría Legal Ltda.', rut: '77.540.111-5', montoNeto: 850000, iva: 0, total: 850000, estado: 'ACEPTADO' },
-  { folio: 31892, tipo: 'Factura Afecta', fecha: '2026-04-12', razonSocial: 'Proveedor Tech S.A.', rut: '96.781.230-1', montoNeto: 2100000, iva: 399000, total: 2499000, estado: 'ACEPTADO' },
-  { folio: 60023, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'Capacitación Empresarial SpA', rut: '79.003.221-9', montoNeto: 350000, iva: 66500, total: 416500, estado: 'PENDIENTE' },
-  { folio: 88192, tipo: 'Factura Afecta', fecha: '2026-04-13', razonSocial: 'Mantención Equipos Ltda.', rut: '76.892.001-4', montoNeto: 480000, iva: 91200, total: 571200, estado: 'ACEPTADO' },
-  { folio: 10231, tipo: 'Boleta Honorarios', fecha: '2026-04-09', razonSocial: 'Juan Pérez Consultorías', rut: '15.432.876-2', montoNeto: 0, iva: 0, total: 800000, estado: 'ACEPTADO' },
-  { folio: 10445, tipo: 'Boleta Honorarios', fecha: '2026-04-11', razonSocial: 'María González Diseño', rut: '17.654.321-K', montoNeto: 0, iva: 0, total: 450000, estado: 'ACEPTADO' },
-];
-
-// ---------------------------------------------------------------------------
 // API ↔ Mock adapter (maps backend FacturaDto to FacturaMock for the UI)
 // ---------------------------------------------------------------------------
 
@@ -277,6 +248,16 @@ function IvaPanel({ emitidas, recibidas }: { emitidas: FacturaMock[]; recibidas:
   const resumen = calcIvaResumen(emitidas, recibidas);
   const hayDeuda = resumen.ivaAPagar > 0;
 
+  const handleExportF29 = () => {
+    const params = new URLSearchParams({
+      ivaDebito:  String(resumen.ivaDebito),
+      ivaCredito: String(resumen.ivaCredito),
+      ppm:        String(resumen.ppm),
+      retencion:  String(resumen.retencionHonorarios),
+    });
+    window.open(`/dashboard/sii/f29?${params.toString()}`, '_blank');
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto">
       {/* Header */}
@@ -379,6 +360,21 @@ function IvaPanel({ emitidas, recibidas }: { emitidas: FacturaMock[]; recibidas:
           <strong>Portal MIPYME del SII</strong> o usa tu software de contabilidad compatible.
           Tasa IVA vigente: 19% (D.L. 825).
         </p>
+      </div>
+
+      {/* Export F29 button */}
+      <div className="mt-5 flex justify-end">
+        <button
+          onClick={handleExportF29}
+          className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="2" y="1" width="11" height="13" rx="1.5" />
+            <path d="M5 5h5M5 7.5h5M5 10h3" />
+            <path d="M2 4h2V1" strokeDasharray="2 2" />
+          </svg>
+          Exportar F29
+        </button>
       </div>
     </div>
   );
@@ -529,10 +525,9 @@ export default function SiiPage() {
       } catch (err) {
         if (cancelled) return;
         console.error('[SII] Error fetching facturas:', err);
-        setFetchError('No se pudo conectar al servidor. Mostrando datos de ejemplo.');
-        // Solo mostrar los de prueba si hay un error de red real
-        setEmitidas(MOCK_EMITIDAS);
-        setRecibidas(MOCK_RECIBIDAS);
+        setFetchError('No se pudo conectar al servidor. Verifica que el backend esté activo.');
+        setEmitidas([]);
+        setRecibidas([]);
       } finally {
         if (!cancelled) setLoadingFacturas(false);
       }

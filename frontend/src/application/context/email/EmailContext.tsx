@@ -1,170 +1,198 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { useAuth } from '../auth/AuthContext';
-import { DEMO_INBOX, DEMO_STARRED, type DemoEmail } from '@/lib/demoData';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 // ---------------------------------------------------------------------------
-// Types
+// Public types — DO NOT change GmailMessage shape without also updating
+// `frontend/src/app/dashboard/crm/inbox/page.tsx`.
 // ---------------------------------------------------------------------------
-
-export interface ComposeData {
-  to: string;
-  subject: string;
-  body: string;
-}
 
 export interface GmailMessage {
   id: string;
+  threadId: string;
   from: string;
-  fromEmail: string;
+  fromEmail?: string;
+  to?: string[];
   subject: string;
   snippet: string;
   date: string;
-  isUnread: boolean;
-  isStarred: boolean;
+  read: boolean;
+  starred?: boolean;
+  isUnread?: boolean;
+  isStarred?: boolean;
   labelIds?: string[];
 }
 
-export interface EmailContextValue {
-  isComposeOpen: boolean;
-  composeData: ComposeData;
-  openCompose: (data?: Partial<ComposeData>) => void;
-  closeCompose: () => void;
-  updateCompose: (data: Partial<ComposeData>) => void;
-  sendEmail: (data: ComposeData & { from: string }) => Promise<void>;
+interface ComposeData {
+  to: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body: string;
+  /** Optional CRM linkage — populated automatically by openComposeForContact(). */
+  contactId?: string;
+  dealId?: string;
+}
+
+interface EmailContextValue {
+  // Data
   inbox: GmailMessage[];
   starred: GmailMessage[];
   isLoadingInbox: boolean;
-  fetchInbox: () => Promise<void>;
-  fetchStarred: () => Promise<void>;
+  isConnected: boolean;
+  connectedEmail: string | null;
+
+  // Compose state
+  isComposeOpen: boolean;
+  composeData: ComposeData;
+
+  // Actions
+  openCompose: (initial?: Partial<ComposeData>) => void;
+  openComposeForContact: (email: string, name?: string, contactId?: string, dealId?: string) => void;
+  closeCompose: () => void;
+  updateCompose: (patch: Partial<ComposeData>) => void;
+  sendEmail: () => Promise<{ ok: boolean; error?: string }>;
+  refreshInbox: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const EMPTY_COMPOSE: ComposeData = { to: '', subject: '', body: '' };
 
-/** Convert our DemoEmail shape to the GmailMessage shape used by UI. */
-function toDemoMessages(emails: DemoEmail[]): GmailMessage[] {
-  return emails.map((e) => ({
-    ...e,
-    snippet: e.snippet,
-    labelIds: undefined,
-  }));
-}
+const EmailContext = createContext<EmailContextValue | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
-// Context
+// Provider
 // ---------------------------------------------------------------------------
-
-const EmailCtx = createContext<EmailContextValue | null>(null);
 
 export function EmailProvider({ children }: { children: React.ReactNode }) {
-  const { isDemoMode } = useAuth();
-  const isDemoRef = useRef(isDemoMode);
-  isDemoRef.current = isDemoMode;
+  const [isComposeOpen, setComposeOpen] = useState(false);
+  const [composeData,   setComposeData] = useState<ComposeData>(EMPTY_COMPOSE);
+  const [inbox,         setInbox]       = useState<GmailMessage[]>([]);
+  const [isLoadingInbox, setLoadingInbox] = useState(false);
+  const [isConnected,   setConnected]   = useState(false);
+  const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
 
-  const [isComposeOpen, setIsComposeOpen] = useState(false);
-  const [composeData, setComposeData] = useState<ComposeData>({ to: '', subject: '', body: '' });
-  const [inbox, setInbox] = useState<GmailMessage[]>([]);
-  const [starred, setStarred] = useState<GmailMessage[]>([]);
-  const [isLoadingInbox, setIsLoadingInbox] = useState(true);
+  // ─── Compose controls ────────────────────────────────────────────────────
 
-  const openCompose = useCallback((data: Partial<ComposeData> = {}) => {
-    setComposeData({ to: '', subject: '', body: '', ...data });
-    setIsComposeOpen(true);
+  const openCompose = useCallback((initial?: Partial<ComposeData>) => {
+    setComposeData({ ...EMPTY_COMPOSE, ...(initial ?? {}) });
+    setComposeOpen(true);
   }, []);
 
-  const closeCompose = useCallback(() => {
-    setIsComposeOpen(false);
-    setComposeData({ to: '', subject: '', body: '' });
+  const openComposeForContact = useCallback(
+    (email: string, _name?: string, contactId?: string, dealId?: string) => {
+      setComposeData({ ...EMPTY_COMPOSE, to: email, contactId, dealId });
+      setComposeOpen(true);
+    },
+    [],
+  );
+
+  const closeCompose = useCallback(() => setComposeOpen(false), []);
+
+  const updateCompose = useCallback((patch: Partial<ComposeData>) => {
+    setComposeData((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const updateCompose = useCallback((data: Partial<ComposeData>) => {
-    setComposeData((prev) => ({ ...prev, ...data }));
-  }, []);
+  // ─── Status / inbox fetch ────────────────────────────────────────────────
 
-  // ── Fetch inbox ─────────────────────────────────────────────────────────
-  const fetchInbox = useCallback(async () => {
-    setIsLoadingInbox(true);
-
-    // Demo mode: use static demo data, no API call.
-    if (isDemoRef.current) {
-      setInbox(toDemoMessages(DEMO_INBOX));
-      setIsLoadingInbox(false);
-      return;
-    }
-
+  const refreshStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/gmail');
-      if (res.status === 401) { setInbox([]); return; }
-      if (!res.ok) throw new Error(`Failed to fetch inbox: ${res.status}`);
-      const data = await res.json();
-      setInbox(Array.isArray(data) ? data : data.messages ?? []);
-    } catch (err) {
-      console.error('[EmailContext] fetchInbox error:', err);
+      const res = await fetch('/api/gmail/status', { cache: 'no-store' });
+      if (!res.ok) { setConnected(false); setConnectedEmail(null); return; }
+      const json = await res.json();
+      setConnected(Boolean(json.connected));
+      setConnectedEmail(json.email ?? null);
+    } catch {
+      setConnected(false);
+      setConnectedEmail(null);
+    }
+  }, []);
+
+  const refreshInbox = useCallback(async () => {
+    setLoadingInbox(true);
+    try {
+      const res = await fetch('/api/gmail/messages?limit=50', { cache: 'no-store' });
+      if (!res.ok) { setInbox([]); return; }
+      const json = await res.json();
+      const items: GmailMessage[] = (json.items ?? []).map((m: GmailMessage) => ({
+        ...m,
+        isUnread: !m.read,
+      }));
+      setInbox(items);
+    } catch {
       setInbox([]);
     } finally {
-      setIsLoadingInbox(false);
+      setLoadingInbox(false);
     }
   }, []);
 
-  // ── Fetch starred ───────────────────────────────────────────────────────
-  const fetchStarred = useCallback(async () => {
-    // Demo mode: use static demo data, no API call.
-    if (isDemoRef.current) {
-      setStarred(toDemoMessages(DEMO_STARRED));
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/gmail/starred');
-      if (res.status === 401) { setStarred([]); return; }
-      if (!res.ok) throw new Error(`Failed to fetch starred: ${res.status}`);
-      const data = await res.json();
-      setStarred(
-        Array.isArray(data) ? data : data.messages ?? data.emails ?? [],
-      );
-    } catch (err) {
-      console.error('[EmailContext] fetchStarred error:', err);
-      setStarred([]);
-    }
-  }, []);
-
-  // ── Send email ──────────────────────────────────────────────────────────
-  const sendEmail = useCallback(async (data: ComposeData & { from: string }) => {
-    // Demo mode: simulate a successful send without calling the API.
-    if (isDemoRef.current) {
-      console.info('[EmailContext] Demo mode — email send simulated.', data.to);
-      return;
-    }
-
-    const res = await fetch('/api/gmail/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body?.error ?? `Send failed: ${res.status}`);
-    }
-  }, []);
-
-  // Initial load
+  // On mount → status, then inbox if connected.
   useEffect(() => {
-    fetchInbox();
-    fetchStarred();
-  }, [fetchInbox, fetchStarred]);
+    (async () => {
+      await refreshStatus();
+    })();
+  }, [refreshStatus]);
 
-  return (
-    <EmailCtx.Provider value={{ isComposeOpen, composeData, openCompose, closeCompose, updateCompose, sendEmail, inbox, starred, isLoadingInbox, fetchInbox, fetchStarred }}>
-      {children}
-    </EmailCtx.Provider>
-  );
+  useEffect(() => {
+    if (isConnected) {
+      void refreshInbox();
+    } else {
+      setInbox([]);
+    }
+  }, [isConnected, refreshInbox]);
+
+  // ─── Send ────────────────────────────────────────────────────────────────
+
+  const sendEmail = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!composeData.to.trim()) return { ok: false, error: 'Destinatario requerido' };
+    try {
+      const res = await fetch('/api/gmail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to:        composeData.to,
+          cc:        composeData.cc,
+          bcc:       composeData.bcc,
+          subject:   composeData.subject,
+          body:      composeData.body,
+          contactId: composeData.contactId,
+          dealId:    composeData.dealId,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        return { ok: false, error: text || `Error ${res.status}` };
+      }
+      setComposeOpen(false);
+      setComposeData(EMPTY_COMPOSE);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }, [composeData]);
+
+  const value: EmailContextValue = {
+    inbox,
+    starred: inbox.filter((m) => m.isStarred || m.starred),
+    isLoadingInbox,
+    isConnected,
+    connectedEmail,
+    isComposeOpen,
+    composeData,
+    openCompose,
+    openComposeForContact,
+    closeCompose,
+    updateCompose,
+    sendEmail,
+    refreshInbox,
+    refreshStatus,
+  };
+
+  return <EmailContext.Provider value={value}>{children}</EmailContext.Provider>;
 }
 
 export function useEmailCompose(): EmailContextValue {
-  const ctx = useContext(EmailCtx);
-  if (!ctx) throw new Error('useEmailCompose must be used within <EmailProvider>');
+  const ctx = useContext(EmailContext);
+  if (!ctx) throw new Error('useEmailCompose must be used within an EmailProvider');
   return ctx;
 }

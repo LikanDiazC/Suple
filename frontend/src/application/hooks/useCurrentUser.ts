@@ -8,27 +8,18 @@ export interface CurrentUser {
   initials: string;
 }
 
-const DEMO_USER: CurrentUser = {
-  email: 'demo@suple.cl',
-  name: 'Demo User',
-  initials: 'DU',
+const FALLBACK_USER: CurrentUser = {
+  email: '',
+  name: 'Invitado',
+  initials: 'IN',
 };
 
-/**
- * Returns the current user info.
- *
- * - In demo mode → static demo user (no localStorage lookup).
- * - In authenticated mode → derives name/email from the auth session.
- */
 export function useCurrentUser(): CurrentUser {
-  const { user, isDemoMode } = useAuth();
-
-  if (isDemoMode) return DEMO_USER;
-
-  if (!user?.email) return DEMO_USER; // fallback while loading
+  const { user } = useAuth();
+  if (!user?.email) return FALLBACK_USER;
 
   const email = user.email;
-  const raw = user.name ?? email.split('@')[0];
+  const raw = user.fullName?.trim() || email.split('@')[0];
   const parts = raw.split(/[\s.]+/).filter(Boolean);
   const initials =
     parts.length >= 2

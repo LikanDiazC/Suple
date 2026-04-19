@@ -333,6 +333,10 @@ export default function ProcessesPage() {
   const [category, setCategory] = useState<Category>('Todos');
   const [startModalDefinition, setStartModalDefinition] = useState<ProcessDefinition | null>(null);
 
+  // Demo seed state
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const fetchDefinitions = useCallback(async () => {
     try {
       const res = await fetch('/api/bpms/definitions');
@@ -354,6 +358,27 @@ export default function ProcessesPage() {
       await fetchDefinitions();
     } catch (err) {
       console.error('[ProcessesPage] publish error:', err);
+    }
+  }
+
+  async function handleLoadDemoSeed() {
+    setSeedLoading(true);
+    setSeedMessage(null);
+    try {
+      const res = await fetch('/api/bpms/seed/furniture', { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Error ${res.status}`);
+      }
+      setSeedMessage({ type: 'success', text: 'Proceso demo cargado correctamente.' });
+      await fetchDefinitions();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      setSeedMessage({ type: 'error', text: msg });
+    } finally {
+      setSeedLoading(false);
+      // Auto-dismiss success after 4 seconds
+      setTimeout(() => setSeedMessage(null), 4000);
     }
   }
 
@@ -418,16 +443,57 @@ export default function ProcessesPage() {
             ))}
           </div>
 
-          {/* New process */}
-          <button
-            onClick={() => router.push('/dashboard/bpms/designer')}
-            className="ml-auto flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 transition-colors shrink-0"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M7 1v12M1 7h12" />
-            </svg>
-            Nuevo Proceso
-          </button>
+          {/* Demo seed button */}
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            {/* Inline seed feedback */}
+            {seedMessage && (
+              <span
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg ${
+                  seedMessage.type === 'success'
+                    ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                    : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                }`}
+              >
+                {seedMessage.type === 'success' ? '✓ ' : '✕ '}
+                {seedMessage.text}
+              </span>
+            )}
+
+            <button
+              onClick={handleLoadDemoSeed}
+              disabled={seedLoading}
+              className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {seedLoading ? (
+                <svg
+                  className="animate-spin"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M7 1.5a5.5 5.5 0 1 1-5.5 5.5" />
+                </svg>
+              ) : (
+                <span aria-hidden="true">📦</span>
+              )}
+              {seedLoading ? 'Cargando...' : 'Cargar proceso demo'}
+            </button>
+
+            {/* New process */}
+            <button
+              onClick={() => router.push('/dashboard/bpms/designer')}
+              className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700 transition-colors shrink-0"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M7 1v12M1 7h12" />
+              </svg>
+              Nuevo Proceso
+            </button>
+          </div>
         </div>
 
         {/* Grid */}

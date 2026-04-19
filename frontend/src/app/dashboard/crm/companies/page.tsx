@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import CrmTableView from '../../../../presentation/components/crm/CrmTableView';
 import { CrmTableProvider } from '../../../../application/context/crm-table';
+import { useCrmTable } from '../../../../application/context/crm-table/CrmTableContext';
 import type { ColumnDef, PropertyType } from '../../../../application/context/crm-table/types';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,20 @@ const TABS = [
   { label: 'Todas las empresas', count: 11, active: true },
   { label: 'Mis empresas',       active: false },
 ];
+
+function GmailAutoSync() {
+  const { refreshData } = useCrmTable();
+  React.useEffect(() => {
+    fetch('/api/gmail/sync-contacts', { method: 'POST' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { companiesCreated: number } | null) => {
+        if (data && data.companiesCreated > 0) refreshData();
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
 
 export default function CompaniesPage() {
   const [showForm, setShowForm] = useState(false);
@@ -132,6 +147,7 @@ export default function CompaniesPage() {
         initialColumns={COMPANY_COLUMNS}
         properties={COMPANY_PROPERTIES}
       >
+        <GmailAutoSync />
         <CrmTableView
           title="Empresas"
           tabs={TABS}

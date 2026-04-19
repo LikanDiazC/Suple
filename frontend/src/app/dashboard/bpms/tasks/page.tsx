@@ -9,7 +9,7 @@ import {
   staggerContainer,
   staggerItem,
 } from '../../../../presentation/animations/variants';
-import type { FormField, Task, TaskStatus } from '../../../../types/bpms';
+import type { FormField, Task, TaskComment, TaskStatus } from '../../../../types/bpms';
 import { formatDate, hoursAgo } from '../../../../lib/formatters';
 import {
   TASK_STATUS_BORDER  as STATUS_BORDER,
@@ -141,6 +141,107 @@ function DynamicField({ field, value, onChange }: DynamicFieldProps) {
 }
 
 // ---------------------------------------------------------------------------
+// CommentsSection
+// ---------------------------------------------------------------------------
+
+interface CommentsSectionProps {
+  taskId: string;
+  comments: TaskComment[];
+  onCommentAdded: () => void;
+}
+
+function CommentsSection({ taskId, comments, onCommentAdded }: CommentsSectionProps) {
+  const [body, setBody]         = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setError('');
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/bpms/tasks/${taskId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: body.trim() }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(json.error ?? `Error ${res.status}`);
+        return;
+      }
+      setBody('');
+      onCommentAdded();
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-neutral-100 px-6 py-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+        Comentarios {comments.length > 0 && `(${comments.length})`}
+      </p>
+
+      {/* Comment list */}
+      {comments.length > 0 && (
+        <div className="mb-4 space-y-3 max-h-44 overflow-y-auto pr-1">
+          {comments.map((c) => (
+            <div key={c.id} className="flex gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-bold text-neutral-600">
+                {c.userId?.slice(0, 2).toUpperCase() ?? 'U'}
+              </div>
+              <div className="flex-1 rounded-lg bg-neutral-50 border border-neutral-100 px-3 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-neutral-700">{c.userId}</span>
+                  <span className="text-[10px] text-neutral-400">
+                    {new Date(c.createdAt).toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed">{c.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add comment form */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <textarea
+          rows={2}
+          placeholder="Escribe un comentario..."
+          className="w-full resize-none rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800 outline-none transition-all focus:border-primary-400 focus:bg-white focus:ring-2 focus:ring-primary-100"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
+        {error && (
+          <p className="text-xs text-red-500">{error}</p>
+        )}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={saving || !body.trim()}
+            className="inline-flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <>
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Enviando...
+              </>
+            ) : (
+              'Agregar comentario'
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CompleteTaskModal
 // ---------------------------------------------------------------------------
 
@@ -153,6 +254,7 @@ interface CompleteTaskModalProps {
   onOutcomeSelect: (outcome: string) => void;
   onSubmit: (outcome: string) => void;
   onClose: () => void;
+  onCommentAdded: () => void;
 }
 
 function CompleteTaskModal({
@@ -164,6 +266,7 @@ function CompleteTaskModal({
   onOutcomeSelect,
   onSubmit,
   onClose,
+  onCommentAdded,
 }: CompleteTaskModalProps) {
   const hasOutcomes = task.approvalOutcomes.length > 0;
 
@@ -292,6 +395,13 @@ function CompleteTaskModal({
             </div>
           )}
         </form>
+
+        {/* Comments section */}
+        <CommentsSection
+          taskId={task.id}
+          comments={task.comments ?? []}
+          onCommentAdded={onCommentAdded}
+        />
       </motion.div>
     </motion.div>
   );
@@ -331,15 +441,385 @@ const toastVariants = {
 };
 
 // ---------------------------------------------------------------------------
+// TeamView component
+// ---------------------------------------------------------------------------
+
+type PageTab = 'tasks' | 'team';
+
+interface TeamMember {
+  id: string;
+  email: string;
+  fullName: string;
+  status: string;
+  role: string;
+  managerId: string | null;
+  createdAt: string;
+}
+
+interface TeamTask {
+  id: string;
+  name: string;
+  assigneeUserId: string | null;
+  status: string;
+  dueDate: string | null;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+interface ReassignModal {
+  task: TeamTask;
+  currentAssigneeId: string;
+}
+
+function TeamView() {
+  const [members, setMembers]           = useState<TeamMember[]>([]);
+  const [tasks, setTasks]               = useState<TeamTask[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [reassignModal, setReassignModal]   = useState<ReassignModal | null>(null);
+  const [newAssigneeId, setNewAssigneeId]   = useState('');
+  const [reason, setReason]             = useState('');
+  const [reassigning, setReassigning]   = useState(false);
+  const [reassignToast, setReassignToast] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/iam/users').then(r => r.ok ? r.json() : []),
+      fetch('/api/bpms/tasks?limit=200').then(r => r.ok ? r.json() : { data: [] }),
+    ]).then(([usersData, tasksData]) => {
+      setMembers(Array.isArray(usersData) ? usersData : (usersData.data ?? []));
+      const rawList = Array.isArray(tasksData) ? tasksData : (tasksData.data ?? []);
+      setTasks(rawList.map((t: Record<string, unknown>) => ({
+        id:             String(t.id),
+        name:           String(t.name ?? ''),
+        assigneeUserId: (t.assigneeUserId as string | null) ?? null,
+        status:         String(t.status),
+        dueDate:        (t.dueDate as string | null) ?? null,
+        priority:       (t.priority as 'HIGH' | 'MEDIUM' | 'LOW' | undefined) ?? undefined,
+      })));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  async function handleReassign() {
+    if (!reassignModal || !newAssigneeId) return;
+    setReassigning(true);
+    try {
+      const res = await fetch(`/api/bpms/tasks/${reassignModal.task.id}/reassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newUserId: newAssigneeId }),
+      });
+      if (!res.ok) return;
+      // Optimistic update
+      setTasks(prev => prev.map(t =>
+        t.id === reassignModal.task.id
+          ? { ...t, assigneeUserId: newAssigneeId }
+          : t,
+      ));
+      setReassignModal(null);
+      setNewAssigneeId('');
+      setReason('');
+      setReassignToast(true);
+      setTimeout(() => setReassignToast(false), 3000);
+    } finally {
+      setReassigning(false);
+    }
+  }
+
+  const ROLE_BADGE: Record<string, string> = {
+    admin:    'bg-purple-100 text-purple-700',
+    manager:  'bg-blue-100 text-blue-700',
+    operator: 'bg-neutral-100 text-neutral-600',
+  };
+
+  const STATUS_COLOR: Record<string, string> = {
+    active:   'bg-green-100 text-green-700',
+    invited:  'bg-amber-100 text-amber-700',
+    disabled: 'bg-red-100 text-red-700',
+  };
+
+  const PRIORITY_BADGE: Record<string, string> = {
+    HIGH:   'bg-red-100 text-red-700',
+    MEDIUM: 'bg-amber-100 text-amber-700',
+    LOW:    'bg-neutral-100 text-neutral-500',
+  };
+
+  const PRIORITY_LABEL: Record<string, string> = {
+    HIGH: 'Alta', MEDIUM: 'Media', LOW: 'Baja',
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-16 rounded-xl bg-neutral-100 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (members.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white py-20 text-center">
+        <p className="text-base font-semibold text-neutral-500">Sin miembros de equipo</p>
+        <p className="mt-1 text-sm text-neutral-400">Invita usuarios desde Configuración → Usuarios</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-3">
+        {members.map((member) => {
+          const memberTasks = tasks.filter(t => t.assigneeUserId === member.id);
+          const pending     = memberTasks.filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS').length;
+          const overdue     = memberTasks.filter(t => t.status === 'OVERDUE').length;
+          const completed   = memberTasks.filter(t => t.status === 'COMPLETED').length;
+          const initials    = member.fullName.split(' ').slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?';
+          const roleKey     = member.role.toLowerCase();
+          const isExpanded  = expandedUserId === member.id;
+          const pendingTasks = memberTasks.filter(t =>
+            t.status === 'PENDING' || t.status === 'IN_PROGRESS' || t.status === 'OVERDUE',
+          );
+
+          return (
+            <div key={member.id} className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+              {/* Member row */}
+              <div className="flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700">
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-neutral-800 truncate">{member.fullName}</p>
+                    <p className="text-xs text-neutral-400 truncate">{member.email}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 ml-4">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${ROLE_BADGE[roleKey] ?? ROLE_BADGE.operator}`}>
+                    {member.role}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_COLOR[member.status] ?? STATUS_COLOR.active}`}>
+                    {member.status === 'active' ? 'Activo' : member.status === 'invited' ? 'Invitado' : 'Desactivado'}
+                  </span>
+
+                  {/* Task stats */}
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    {pending > 0 && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-700">{pending} pend.</span>
+                    )}
+                    {overdue > 0 && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700">{overdue} venc.</span>
+                    )}
+                    {completed > 0 && (
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-green-700">{completed} comp.</span>
+                    )}
+                    {memberTasks.length === 0 && (
+                      <span className="text-neutral-300">Sin tareas</span>
+                    )}
+                  </div>
+
+                  {/* Expand button */}
+                  {pendingTasks.length > 0 && (
+                    <button
+                      onClick={() => setExpandedUserId(isExpanded ? null : member.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100 transition-colors"
+                    >
+                      Ver tareas
+                      <svg
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      >
+                        <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded task list */}
+              {isExpanded && pendingTasks.length > 0 && (
+                <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-3 space-y-2">
+                  {pendingTasks.map(task => (
+                    <div
+                      key={task.id}
+                      className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 gap-3"
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-sm font-semibold text-neutral-800 truncate">{task.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {task.priority && (
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${PRIORITY_BADGE[task.priority]}`}>
+                              {PRIORITY_LABEL[task.priority]}
+                            </span>
+                          )}
+                          {task.status === 'OVERDUE' && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Vencida</span>
+                          )}
+                          {task.dueDate && (
+                            <span className="text-[11px] text-neutral-400">
+                              Vence: {formatDate(task.dueDate)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setReassignModal({ task, currentAssigneeId: member.id });
+                          setNewAssigneeId('');
+                          setReason('');
+                        }}
+                        className="shrink-0 rounded-lg border border-neutral-200 bg-neutral-100 px-2.5 py-1.5 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-200 transition-colors"
+                      >
+                        Reasignar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reassign modal */}
+      <AnimatePresence>
+        {reassignModal && (
+          <motion.div
+            variants={overlayVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setReassignModal(null); }}
+          >
+            <motion.div
+              variants={sheetVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-neutral-100 px-6 py-5">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Reasignar tarea</p>
+                  <h3 className="mt-1 text-base font-bold text-neutral-900 leading-snug">{reassignModal.task.name}</h3>
+                </div>
+                <button
+                  onClick={() => setReassignModal(null)}
+                  className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                    <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-neutral-600">
+                    Asignar a
+                  </label>
+                  <select
+                    value={newAssigneeId}
+                    onChange={(e) => setNewAssigneeId(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800 outline-none transition-all focus:border-primary-400 focus:bg-white focus:ring-2 focus:ring-primary-100"
+                  >
+                    <option value="">Seleccionar miembro...</option>
+                    {members
+                      .filter(m => m.id !== reassignModal.currentAssigneeId)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>{m.fullName}</option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-neutral-600">
+                    Motivo <span className="font-normal text-neutral-400">(opcional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ej: Carga de trabajo elevada, reasignación por ausencia..."
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full resize-none rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800 outline-none transition-all focus:border-primary-400 focus:bg-white focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setReassignModal(null)}
+                    className="rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!newAssigneeId || reassigning}
+                    onClick={handleReassign}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60 transition-colors"
+                  >
+                    {reassigning ? (
+                      <>
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Confirmando...
+                      </>
+                    ) : (
+                      'Confirmar'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reassign toast */}
+      <AnimatePresence>
+        {reassignToast && (
+          <motion.div
+            variants={toastVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-primary-200 bg-primary-50 px-5 py-3.5 shadow-xl"
+          >
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-500">
+              <svg viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth={2.2} className="h-3.5 w-3.5">
+                <path d="M2 7l4 4 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-primary-800">Tarea reasignada</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page component
 // ---------------------------------------------------------------------------
 
 export default function TasksPage() {
   const router = useRouter();
 
+  const [activeTab, setActiveTab] = useState<PageTab>('tasks');
   const [tasks, setTasks]                 = useState<Task[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
   const [statusFilter, setStatusFilter]   = useState('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [completeModal, setCompleteModal] = useState<Task | null>(null);
   const [formData, setFormData]           = useState<Record<string, unknown>>({});
   const [selectedOutcome, setSelectedOutcome] = useState('');
@@ -370,9 +850,13 @@ export default function TasksPage() {
   const pendingCount = tasks.filter((t) => t.status === 'PENDING').length;
   const overdueCount = tasks.filter((t) => t.status === 'OVERDUE').length;
 
-  const filtered = statusFilter === 'ALL'
-    ? tasks
-    : tasks.filter((t) => t.status === statusFilter);
+  const filtered = tasks
+    .filter(t => statusFilter === 'ALL' || t.status === statusFilter)
+    .filter(t => priorityFilter === 'ALL' || t.priority === priorityFilter)
+    .sort((a, b) => {
+      const order: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2, undefined: 3 };
+      return (order[a.priority ?? 'undefined'] ?? 3) - (order[b.priority ?? 'undefined'] ?? 3);
+    });
 
   // ---- handlers -------------------------------------------------------------
 
@@ -432,6 +916,25 @@ export default function TasksPage() {
         animate="animate"
         className="p-4 sm:p-6 lg:p-8"
       >
+        {/* Tab bar */}
+        <div className="mb-6 flex gap-1 rounded-xl border border-neutral-100 bg-neutral-50 p-1 w-fit">
+          {([['tasks', 'Mis Tareas'], ['team', 'Mi Equipo']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`rounded-lg px-5 py-2 text-sm font-semibold transition-all ${
+                activeTab === key
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'tasks' ? (
+        <>
         {/* Header row */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <h2 className="text-xl font-bold text-neutral-900">Bandeja de entrada</h2>
@@ -448,7 +951,7 @@ export default function TasksPage() {
         </div>
 
         {/* Filter row */}
-        <div className="mb-6 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-2">
           {FILTER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -460,6 +963,24 @@ export default function TasksPage() {
               }`}
             >
               {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Priority filter row */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Prioridad:</span>
+          {([['ALL', 'Todas'], ['HIGH', 'Alta'], ['MEDIUM', 'Media'], ['LOW', 'Baja']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setPriorityFilter(val)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                priorityFilter === val
+                  ? 'bg-neutral-900 text-white'
+                  : 'border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400'
+              }`}
+            >
+              {label}
             </button>
           ))}
         </div>
@@ -512,6 +1033,17 @@ export default function TasksPage() {
                       {task.assigneeRole && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600">
                           👤 {task.assigneeRole}
+                        </span>
+                      )}
+
+                      {task.priority && (
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                          task.priority === 'HIGH'   ? 'bg-red-100 text-red-700' :
+                          task.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
+                                                       'bg-neutral-100 text-neutral-500'
+                        }`}>
+                          {task.priority === 'HIGH' ? '🔴' : task.priority === 'MEDIUM' ? '🟡' : '🟢'}{' '}
+                          {task.priority === 'HIGH' ? 'Alta' : task.priority === 'MEDIUM' ? 'Media' : 'Baja'}
                         </span>
                       )}
 
@@ -584,6 +1116,10 @@ export default function TasksPage() {
             })}
           </motion.div>
         )}
+        </>
+        ) : (
+          <TeamView />
+        )}
       </motion.div>
 
       {/* Complete task modal */}
@@ -598,6 +1134,7 @@ export default function TasksPage() {
             onOutcomeSelect={setSelectedOutcome}
             onSubmit={handleComplete}
             onClose={() => setCompleteModal(null)}
+            onCommentAdded={fetchTasks}
           />
         )}
       </AnimatePresence>

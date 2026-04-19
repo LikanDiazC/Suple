@@ -41,3 +41,26 @@ export function saveWidgetPrefs(enabled: Set<string>) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...enabled]));
   } catch { /* ignore */ }
 }
+
+export const WIDGET_ORDER_KEY = 'dashboard_widget_order_v1';
+
+export function loadWidgetOrder(): string[] {
+  if (typeof window === 'undefined') return WIDGET_CATALOG.map(w => w.id);
+  try {
+    const raw = localStorage.getItem(WIDGET_ORDER_KEY);
+    if (raw) {
+      const stored = JSON.parse(raw) as string[];
+      // ensure all catalog widgets are represented (handle new widgets added later)
+      const catalogIds = WIDGET_CATALOG.map(w => w.id);
+      const extra = catalogIds.filter(id => !stored.includes(id));
+      return [...stored.filter(id => catalogIds.includes(id)), ...extra];
+    }
+  } catch { /* ignore */ }
+  return WIDGET_CATALOG.map(w => w.id);
+}
+
+export function saveWidgetOrder(order: string[]) {
+  try {
+    localStorage.setItem(WIDGET_ORDER_KEY, JSON.stringify(order));
+  } catch { /* ignore */ }
+}

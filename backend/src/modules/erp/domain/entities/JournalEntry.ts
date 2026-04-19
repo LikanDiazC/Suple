@@ -134,6 +134,11 @@ export class JournalEntry extends AggregateRoot<JournalEntryProps> {
     return Result.ok(entry);
   }
 
+  /** Rehydrate from persistence. Bypasses validation — DB triggers + ORM hold invariants. */
+  static reconstitute(id: string, tenantId: string, props: JournalEntryProps): JournalEntry {
+    return new JournalEntry(UniqueId.from(id), tenantId, props);
+  }
+
   /**
    * Validates the fundamental accounting equation:
    *   Total Debits === Total Credits

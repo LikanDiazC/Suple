@@ -380,6 +380,17 @@ interface CrmTableProviderProps {
 }
 
 export function CrmTableProvider({ objectType, initialColumns, properties = [], children }: CrmTableProviderProps) {
+  // Load myRecordIds from localStorage synchronously to avoid race conditions.
+  const storedMyRecordIds = (() => {
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const stored = localStorage.getItem(`crm_my_records_${objectType}`);
+      return stored ? new Set<string>(JSON.parse(stored) as string[]) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  })();
+
   const initialState: CrmTableState = {
     objectType,
     columns: initialColumns,
@@ -399,7 +410,7 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
     showSortPanel: false,
     activeTabIndex: 0,
     viewType: 'table',
-    myRecordIds: new Set(),
+    myRecordIds: storedMyRecordIds,
     selectedRecordId: null,
     exportJobs: [],
   };
@@ -433,6 +444,16 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
     dispatch({ type: 'FETCH_START' });
 
     try {
+      // Tab 1 = "Mis contactos": filter by stored IDs on the backend
+      const isMyRecordsTab = state.activeTabIndex === 1;
+      const myIds = [...state.myRecordIds];
+
+      // If on "Mis contactos" but no IDs saved, skip fetch and return empty immediately
+      if (isMyRecordsTab && myIds.length === 0) {
+        dispatch({ type: 'FETCH_SUCCESS', payload: { results: [], total: 0, page: 1, limit: state.pagination.limit, totalPages: 0 } });
+        return;
+      }
+
       const params = new URLSearchParams({
         page: state.pagination.page.toString(),
         limit: state.pagination.limit.toString(),
@@ -440,6 +461,7 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
         order: state.sort.order,
         ...(state.debouncedSearch && { search: state.debouncedSearch }),
         ...buildFilterParams(),
+        ...(isMyRecordsTab && myIds.length > 0 && { _ids: myIds.join(',') }),
       });
 
       const res = await fetch(`/api/crm/${objectType}?${params}`, { signal: controller.signal });
@@ -450,7 +472,7 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
       if (err instanceof DOMException && err.name === 'AbortError') return;
       dispatch({ type: 'FETCH_ERROR', payload: (err as Error).message });
     }
-  }, [objectType, state.pagination.page, state.pagination.limit, state.sort, state.debouncedSearch, buildFilterParams]);
+  }, [objectType, state.pagination.page, state.pagination.limit, state.sort, state.debouncedSearch, state.activeTabIndex, state.myRecordIds, buildFilterParams]);
 
   useEffect(() => {
     fetchData();
@@ -479,6 +501,14 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
   const refreshData = useCallback(() => fetchData(), [fetchData]);
   const setActiveTab = useCallback((index: number) => dispatch({ type: 'SET_ACTIVE_TAB', payload: index }), []);
   const setViewType = useCallback((vt: 'table' | 'board') => dispatch({ type: 'SET_VIEW_TYPE', payload: vt }), []);
+  // --- Persist myRecordIds in localStorage (save only — initial load is in initialState) ---
+  const MY_RECORDS_KEY = `crm_my_records_${objectType}`;
+  useEffect(() => {
+    try {
+      localStorage.setItem(MY_RECORDS_KEY, JSON.stringify([...state.myRecordIds]));
+    } catch { /* ignore */ }
+  }, [MY_RECORDS_KEY, state.myRecordIds]);
+
   const addToMyRecords = useCallback((id: string) => dispatch({ type: 'ADD_TO_MY_RECORDS', payload: id }), []);
   const removeFromMyRecords = useCallback((id: string) => dispatch({ type: 'REMOVE_FROM_MY_RECORDS', payload: id }), []);
   const toggleMyRecord = useCallback((id: string) => dispatch({ type: 'TOGGLE_MY_RECORD', payload: id }), []);
@@ -543,13 +573,10 @@ export function CrmTableProvider({ objectType, initialColumns, properties = [], 
   // --- Derived ---
   const visibleColumns = state.columns.filter((c) => c.visible);
 
-  // Tab 0 = All, Tab 1 = My Records only
+  // Tab 0 = All, Tab 1 = My Records (backend already filtered by _ids)
   const displayRecords = useMemo(() => {
-    if (state.activeTabIndex === 1) {
-      return state.records.filter((r) => state.myRecordIds.has(r.id));
-    }
     return state.records;
-  }, [state.records, state.activeTabIndex, state.myRecordIds]);
+  }, [state.records]);
 
   const selectedRecord = useMemo(() => {
     if (!state.selectedRecordId) return null;

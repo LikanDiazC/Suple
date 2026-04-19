@@ -7,12 +7,15 @@ import {
   Param,
   Query,
   Body,
+  Req,
   HttpCode,
   HttpStatus,
   NotFoundException,
   ConflictException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { ListCrmRecordsUseCase } from '../../application/use-cases/ListCrmRecords';
 import { CreateCrmRecordUseCase } from '../../application/use-cases/CreateCrmRecord';
 import { UpdateCrmRecordUseCase } from '../../application/use-cases/UpdateCrmRecord';
@@ -45,10 +48,6 @@ import {
  */
 @Controller('api/crm')
 export class CrmRecordController {
-  // Dev-mode hardcoded tenant
-  private readonly DEV_TENANT = 'tnt_demo01';
-  private readonly DEV_USER = 'user_dev';
-
   constructor(
     private readonly listUseCase: ListCrmRecordsUseCase,
     private readonly createUseCase: CreateCrmRecordUseCase,
@@ -56,39 +55,37 @@ export class CrmRecordController {
     private readonly deleteUseCase: DeleteCrmRecordUseCase,
   ) {}
 
-  /**
-   * GET /api/crm/:objectType?page=1&limit=25&sort=create_date&order=desc&search=...
-   */
+  private ctx(req: Request): { tenantId: string; userId: string } {
+    const u = req.authenticatedUser;
+    if (!u) throw new UnauthorizedException();
+    return { tenantId: u.tenantId, userId: u.userId };
+  }
+
   @Get(':objectType')
   async list(
     @Param('objectType') objectType: string,
     @Query() query: ListCrmRecordsQueryDto,
+    @Req() req: Request,
   ) {
     this.validateObjectType(objectType);
-    return this.listUseCase.execute(this.DEV_TENANT, objectType, query);
+    return this.listUseCase.execute(this.ctx(req).tenantId, objectType, query);
   }
 
-  /**
-   * POST /api/crm/:objectType
-   * Body: { properties: { ... }, associations?: [...] }
-   */
   @Post(':objectType')
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Param('objectType') objectType: string,
     @Body() dto: CreateCrmRecordDto,
+    @Req() req: Request,
   ) {
     this.validateObjectType(objectType);
     dto.objectType = objectType;
+    const { tenantId, userId } = this.ctx(req);
 
-    const result = await this.createUseCase.execute(this.DEV_TENANT, dto, this.DEV_USER);
-
-    if (result.isFail()) {
-      throw new BadRequestException(result.error);
-    }
+    const result = await this.createUseCase.execute(tenantId, dto, userId);
+    if (result.isFail()) throw new BadRequestException(result.error);
 
     const data = result.value;
-
     if (data.blocked) {
       throw new ConflictException({
         message: 'Duplicate record detected',
@@ -96,72 +93,48 @@ export class CrmRecordController {
         autoAssociations: data.autoAssociations,
       });
     }
-
     return data;
   }
 
-  /**
-   * GET /api/crm/:objectType/:id
-   */
   @Get(':objectType/:id')
   async getById(
     @Param('objectType') objectType: string,
     @Param('id') id: string,
+    @Req() req: Request,
   ) {
     this.validateObjectType(objectType);
-
-    // Use the list use case with a filter is overkill; add direct findById later
-    // For now, return from the list
-    const result = await this.listUseCase.execute(this.DEV_TENANT, objectType, {
-      page: 1,
-      limit: 1000,
+    const result = await this.listUseCase.execute(this.ctx(req).tenantId, objectType, {
+      page: 1, limit: 1000,
     });
-
     const record = result.results.find((r) => r.id === id);
-    if (!record) {
-      throw new NotFoundException(`${objectType} record ${id} not found`);
-    }
-
+    if (!record) throw new NotFoundException(`${objectType} record ${id} not found`);
     return record;
   }
 
-  /**
-   * PATCH /api/crm/:objectType/:id
-   * Body: { properties: { field: value, ... } }
-   */
   @Patch(':objectType/:id')
   async update(
     @Param('objectType') objectType: string,
     @Param('id') id: string,
     @Body() dto: UpdateCrmRecordDto,
+    @Req() req: Request,
   ) {
     this.validateObjectType(objectType);
-
-    const result = await this.updateUseCase.execute(this.DEV_TENANT, id, dto, this.DEV_USER);
-
-    if (result.isFail()) {
-      throw new NotFoundException(result.error);
-    }
-
+    const { tenantId, userId } = this.ctx(req);
+    const result = await this.updateUseCase.execute(tenantId, id, dto, userId);
+    if (result.isFail()) throw new NotFoundException(result.error);
     return result.value;
   }
 
-  /**
-   * DELETE /api/crm/:objectType/:id
-   */
   @Delete(':objectType/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @Param('objectType') objectType: string,
     @Param('id') id: string,
+    @Req() req: Request,
   ) {
     this.validateObjectType(objectType);
-
-    const result = await this.deleteUseCase.execute(this.DEV_TENANT, id);
-
-    if (result.isFail()) {
-      throw new NotFoundException(result.error);
-    }
+    const result = await this.deleteUseCase.execute(this.ctx(req).tenantId, id);
+    if (result.isFail()) throw new NotFoundException(result.error);
   }
 
   private validateObjectType(objectType: string): void {
